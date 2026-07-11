@@ -1,0 +1,184 @@
+<div id="game-root">
+  <div id="stage">
+    <canvas id="cv" width="720" height="1160"></canvas>
+    <div class="fx" id="grain"></div>
+    <div class="fx" id="vig"></div>
+
+    <div id="care" class="hidden">
+      <div class="chip" id="chip-feed"><div class="ic">&#127831;</div><div class="lb">FEED</div></div>
+      <div class="chip" id="chip-play"><div class="ic">&#129526;</div><div class="lb">PLAY</div></div>
+      <div class="chip" id="chip-gift"><div class="ic">&#127873;</div><div class="lb">GIFT</div></div>
+    </div>
+
+    <div id="whisper"></div>
+    <div id="bar">
+      <button class="bigbtn hidden" id="btn-parade">&#128062; TODAY'S PAWRADE #<span id="day-num"></span></button>
+      <button class="bigbtn hidden" id="btn-map">&#127968; THE NEIGHBORHOOD</button>
+      <div id="bar-icons" class="hidden">
+        <button class="iconbtn" id="btn-wardrobe"><span class="ic">&#128087;</span><span class="lb">wardrobe</span></button>
+        <button class="iconbtn" id="btn-dreams"><span class="ic">&#128214;</span><span class="lb">dreams</span></button>
+        <button class="iconbtn" id="btn-shop"><span class="ic">&#128715;</span><span class="lb">furnish</span><span id="shop-dl" hidden>0</span></button>
+        <button class="iconbtn" id="btn-practice"><span class="ic">&#127769;</span><span class="lb">stroll</span><span class="lb" id="stroll-hearts" style="color:#7fb8e8;font-size:10px;letter-spacing:1px"></span></button>
+      </div>
+      <button class="bigbtn hidden" id="btn-tuck">&#128716; TUCK THEM IN &middot; 0</button>
+    </div>
+
+    <div class="overlay hidden2" id="night-ov">
+      <div class="modal">
+        <div class="logo" id="night-title" style="font-size:24px">NIGHT 1</div>
+        <div class="tag" id="night-obj">objective</div>
+        <div id="night-moons" style="font-size:30px;letter-spacing:6px;margin:4px 0">&middot;&middot;&middot;</div>
+        <div class="subline" id="night-best"></div>
+        <button class="btn gold" id="btn-night-play">&#128062; PLAY THIS NIGHT</button>
+        <button class="btn dim2" id="btn-night-close">back to the map</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="demo-ov">
+      <div class="modal" style="width:min(400px,92%)">
+        <canvas id="demo-cv" width="360" height="230" style="width:100%;border-radius:16px;display:block"></canvas>
+        <div class="logo" id="demo-title" style="font-size:21px;margin-top:12px">the parade</div>
+        <div class="subline hand" id="demo-line" style="font-size:19px;min-height:2.2em">&nbsp;</div>
+        <div id="demo-dots" style="letter-spacing:8px;font-size:15px;color:#8f7bb0;margin:2px 0 8px">&bull; &bull; &bull; &bull;</div>
+        <button class="btn gold" id="demo-next">next &#8594;</button>
+        <button class="btn dim2" id="demo-skip" style="padding:8px;font-size:12px">skip the tour</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="wardrobe-ov">
+      <div class="modal" style="width:min(400px,92%)">
+        <div class="logo" id="wardrobe-title" style="font-size:21px">the wardrobe</div>
+        <canvas id="wardrobe-cv" width="200" height="180" style="width:200px;height:180px;display:block;margin:8px auto;border-radius:16px"></canvas>
+        <div id="wardrobe-preview-bar" class="hidden" style="display:flex;gap:8px;justify-content:center;margin:0 0 8px">
+          <button class="btn dim2" id="wardrobe-put-back" style="margin:0;flex:1;padding:9px">put it back</button>
+          <button class="btn gold" id="wardrobe-confirm-buy" style="margin:0;flex:1;padding:9px">buy &middot; &#10022; <span id="wardrobe-buy-cost">0</span></button>
+        </div>
+        <div id="wardrobe-list"></div>
+        <button class="btn dim2" id="wardrobe-close" style="margin-top:10px">done</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="founder-ov">
+      <div class="modal" style="width:min(400px,92%)">
+        <div class="logo" style="font-size:22px">the founder pack &#128155;</div>
+        <div id="founder-body">
+          <div class="tag">one&#8209;time &middot; $3.99 &middot; yours forever</div>
+          <div class="howto">
+            <b>the founder crown</b> &mdash; a little gold, always.<br>
+            <b>a golden den</b> &mdash; your whole home glows.<br>
+            <b>the founder paw</b> &mdash; &#128062;&#128155; on every story you share.<br>
+            <b>our whole thanks</b> &mdash; you keep the lanterns lit.
+          </div>
+          <div class="subline" style="margin:8px 2px">no loot boxes. no paid energy. no ads. no pay&#8209;to&#8209;win &mdash; ever. just this, once.</div>
+          <div class="subline hand" style="font-size:16px">get your code at <b id="founder-url">pawrade.pages.dev/founder</b>, then paste it:</div>
+          <input id="founder-code" maxlength="24" placeholder="PAW-XXXXX" autocomplete="off" style="background:#1d1526;border:2px solid #574371;border-radius:12px;padding:9px 14px;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:16px;color:#fff;text-align:center;width:70%;letter-spacing:2px;outline:none;margin:6px 0;text-transform:uppercase">
+          <button class="btn gold" id="founder-redeem">redeem</button>
+          <div class="subline hand" id="founder-msg" style="min-height:1.3em;margin-top:4px"></div>
+        </div>
+        <div id="founder-thanks" class="hidden">
+          <div class="tag hand" style="font-size:23px">you&rsquo;re a founder. thank you &mdash; truly. &#128155;</div>
+          <div class="howto">the founder crown is in your wardrobe, your den glows gold, and every story you share wears the founder paw.</div>
+        </div>
+        <button class="btn dim2" id="founder-close" style="margin-top:10px">close</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="slot-ov">
+      <div class="modal" style="width:min(400px,92%)">
+        <div class="logo" id="slot-title" style="font-size:21px">the rug</div>
+        <div class="tag" id="slot-cost">&#10022; 40 &middot; pick a style</div>
+        <div id="slot-choices">
+          <canvas class="slot-choice" data-i="0" width="100" height="100"></canvas>
+          <canvas class="slot-choice" data-i="1" width="100" height="100"></canvas>
+          <canvas class="slot-choice" data-i="2" width="100" height="100"></canvas>
+        </div>
+        <button class="btn dim2" id="slot-close">not now</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="dreams-ov">
+      <div class="modal" style="width:min(400px,92%)">
+        <div class="logo" style="font-size:22px">the dreams</div>
+        <div class="tag">everyone you can raise &mdash; and the ones still to come.</div>
+        <canvas id="dreams-cv" width="360" height="500" style="width:100%;border-radius:14px;display:block;margin:6px 0"></canvas>
+        <div class="subline" id="dreams-sub"></div>
+        <div class="subline hand" id="dreams-hint" style="font-size:17px;min-height:1.2em"></div>
+        <button class="btn dim2" id="btn-dreams-close" style="margin-top:8px">back to the den</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="shop-ov">
+      <div class="modal">
+        <div class="logo" style="font-size:22px">the den shop</div>
+        <div class="tag" id="shop-dl2">&#10022; 0 dreamlight</div>
+        <div id="shop-list"></div>
+        <button class="btn dim2" id="btn-shop-close" style="margin-top:12px">back to the den</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="creator-ov">
+      <div class="modal">
+        <div class="logo">PAWRADE</div>
+        <div class="tag">before anything else &mdash; who's your best friend?</div>
+        <div class="fieldlbl">SPECIES</div>
+        <div class="crow" id="c-species"></div>
+        <div class="fieldlbl">COAT</div>
+        <div class="crow" id="c-coat"></div>
+        <div class="fieldlbl">NAME</div>
+        <input id="petname" maxlength="12" value="Mochi" autocomplete="off">
+        <button class="btn gold" id="btn-meet" style="margin-top:14px">MEET THEM &#8594;</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="end-ov">
+      <div class="modal">
+        <div class="logo" id="end-title" style="font-size:24px">TUCKED IN</div>
+        <div class="subline" id="end-run"></div>
+        <div class="bigscore" id="end-score">0</div>
+        <div class="subline hand" id="end-note"></div>
+        <div class="subline" id="end-parade"></div>
+        <div class="statrow">
+          <div><div class="v" id="st-days">0</div><div class="k">NIGHTS</div></div>
+          <div><div class="v" id="st-streak">0</div><div class="k">STREAK</div></div>
+          <div><div class="v" id="st-best">0</div><div class="k">BEST</div></div>
+        </div>
+        <button class="btn gold" id="btn-copy">&#128203; COPY TONIGHT'S STORY</button>
+        <button class="btn gold hidden" id="btn-end-map">&#127968; THE NEIGHBORHOOD &#8594;</button>
+        <button class="btn dim2" id="btn-again">another stroll</button>
+        <button class="btn dim2" id="btn-home">back to the den</button>
+        <div class="countdown" id="end-count"></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="leave-ov">
+      <div class="modal" style="width:min(360px,90%)">
+        <div class="logo" id="leave-title" style="font-size:21px">leave for now?</div>
+        <div class="tag" id="leave-note">nothing lost &mdash; come back whenever.</div>
+        <button class="btn dim2" id="leave-stay">keep playing</button>
+        <button class="btn gold" id="leave-go">leave</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="glowup-ov">
+      <div class="modal" style="width:min(380px,92%)">
+        <div class="logo" style="font-size:21px" id="glowup-title">the glow-up</div>
+        <canvas id="glowup-cv" width="300" height="170" style="width:100%;border-radius:14px;display:block;margin:8px 0"></canvas>
+        <div class="subline hand" id="glowup-line" style="font-size:17px"></div>
+        <button class="btn gold" id="glowup-copy">&#128203; copy their story</button>
+        <button class="btn dim2" id="glowup-close">aww &#128155;</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden2" id="rescue-ov">
+      <div class="modal">
+        <div class="tag" style="font-size:24px" id="rescue-head">someone's outside&hellip;</div>
+        <canvas id="rescue-cv" width="280" height="200" style="width:100%;border-radius:14px"></canvas>
+        <div class="subline hand" id="rescue-line" style="margin-top:8px"></div>
+        <input id="rescuename" maxlength="12" value="Penguin" autocomplete="off" style="background:#1d1526;border:2px solid #574371;border-radius:12px;padding:8px 14px;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:16px;color:#fff;text-align:center;width:60%;outline:none;margin-top:6px">
+        <button class="btn gold" id="btn-adopt" style="margin-top:12px">&#127968; TAKE THEM HOME</button>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+</div>
