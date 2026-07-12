@@ -131,6 +131,11 @@ save.botBeats = save.botBeats || 0;      // dailies where you out-hugged the bot
 if (save.strollEnergy == null) save.strollEnergy = 3;   // stroll hearts — daily & the neighborhood are ALWAYS unlimited, only strolls tucker out
 if (save.strollEnergyT == null) save.strollEnergyT = Date.now();
 if (save.founder === undefined) save.founder = false; // the one-time founder pack (supporter)
+if (!save.denFurn) {   // the iso room's placed furniture: tileKey 'col_row' -> furniture id. seed from anything already owned.
+  save.denFurn = {};
+  var _fseed = { rug: '3_3', hearth: '1_0', lamp: '5_0', fern: '0_4', cushion: '4_5' };
+  for (var _fk in _fseed) if (save.furniture[_fk]) save.denFurn[_fseed[_fk]] = _fk;
+}
 if (save.pet) { if (save.pet.mood == null) save.pet.mood = 82; if (save.pet.moodT == null) save.pet.moodT = Date.now(); if (save.pet.bond == null) save.pet.bond = 0; }
 if (save.demoSeen === undefined) save.demoSeen = false;
 if (save.tutDone === undefined) save.tutDone = false;
@@ -382,7 +387,7 @@ var petIdle = null, petIdleNext = 0;                 // den pet autonomous idle 
 // single-file zero-dep law, so this is the classic mobile-game trick — flat sprites that move & scale on
 // ---- the den is an ISOMETRIC room: a diamond floor grid you furnish, seen from a cozy 3/4 angle ----
 // everything (floor, furniture, pets) is depth-sorted by screen-Y so "further back" always draws behind "closer."
-var ISO_CX = 360, ISO_TOPY = 300, ISO_HW = 302, ISO_HH = 159, ISO_COLS = 7, ISO_ROWS = 7, ISO_WALLH = 168;
+var ISO_CX = 360, ISO_TOPY = 298, ISO_HW = 330, ISO_HH = 194, ISO_COLS = 7, ISO_ROWS = 7, ISO_WALLH = 172;
 var ISO_AX = ISO_HW / ISO_COLS, ISO_AY = ISO_HH / ISO_ROWS;   // half-extents of one tile
 function isoCorner(c, r) { return { x: ISO_CX + (c - r) * ISO_AX, y: ISO_TOPY + (c + r) * ISO_AY }; }        // a grid-line crossing
 function isoTile(col, row) { return { x: ISO_CX + (col - row) * ISO_AX, y: ISO_TOPY + (col + row + 1) * ISO_AY, scale: 0.6 + (col + row) / (2 * (ISO_COLS - 1)) * 0.62 }; } // a tile CENTRE
@@ -392,6 +397,16 @@ function denProject(depth, lateral) {
   var col = Math.max(0, Math.min(ISO_COLS - 1, mid + sp)), row = Math.max(0, Math.min(ISO_ROWS - 1, mid - sp));
   return { x: ISO_CX + (col - row) * ISO_AX, y: ISO_TOPY + (col + row + 1) * ISO_AY, scale: 0.58 + (col + row) / (2 * (ISO_COLS - 1)) * 0.62 };
 }
+function tileKey(col, row) { return col + '_' + row; }
+function screenToTile(sx, sy) {   // inverse iso: which floor tile does a screen point fall on?
+  var s = (sy - ISO_TOPY) / ISO_AY - 1, d = (sx - ISO_CX) / ISO_AX;   // s = col+row, d = col-row
+  var col = Math.round((s + d) / 2), row = Math.round((s - d) / 2);
+  if (col < 0 || col > ISO_COLS - 1 || row < 0 || row > ISO_ROWS - 1) return null;
+  return { col: col, row: row };
+}
+// ---- furnish mode: place, move & remove furniture on the iso tiles ----
+var furnishMode = false, heldFurn = null;   // heldFurn = { id, moving } while placing/dragging a piece
+var furnCatRects = [], furnDoneRect = null, furnTrashRect = null;   // canvas hit-rects rebuilt each furnish frame
 // each roamer picks waypoints from its own zone only. the PET owns the centre column as the hero (mid-depth so its
 // floating name has clear sky above and its chin clears the whisper below); everyone else lives in the back band,
 // pushed to the LEFT/RIGHT so they never share the pet's centre column — no sprite or label ever converges.
@@ -724,6 +739,27 @@ function onDown(e) {
     if (p.x >= MAP_BACK.x && p.x <= MAP_BACK.x + MAP_BACK.w && p.y >= MAP_BACK.y && p.y <= MAP_BACK.y + MAP_BACK.h) { audio(); uiTick(); goDen(); return; }
     mapDrag = { y0: p.y, s0: mapScroll, moved: 0, px: p.x, py: p.y }; return;
   }
+  if (screenMode === 'den' && furnishMode) {   // ---- furnish mode owns all taps until 'done' ----
+    var fi2;
+    if (furnDoneRect && p.x >= furnDoneRect.x && p.x <= furnDoneRect.x + furnDoneRect.w && p.y >= furnDoneRect.y && p.y <= furnDoneRect.y + furnDoneRect.h) {
+      audio(); if (heldFurn && heldFurn.moving) { /* dropped nowhere: leave it out (removed) */ } heldFurn = null; furnishMode = false; persist(); fadeFrom = performance.now(); setUI(); return;
+    }
+    if (furnTrashRect && p.x >= furnTrashRect.x && p.x <= furnTrashRect.x + furnTrashRect.w && p.y >= furnTrashRect.y && p.y <= furnTrashRect.y + furnTrashRect.h) { audio(); heldFurn = null; return; } // discard held piece
+    for (fi2 = 0; fi2 < furnCatRects.length; fi2++) { var cr = furnCatRects[fi2]; if (p.x >= cr.x && p.x <= cr.x + cr.w && p.y >= cr.y && p.y <= cr.y + cr.h) { audio(); heldFurn = { id: cr.id, moving: false }; return; } }
+    var t = screenToTile(p.x, p.y);
+    if (t) {
+      var k = tileKey(t.col, t.row);
+      if (heldFurn) {
+        if (!save.denFurn[k]) {
+          if (heldFurn.moving) { save.denFurn[k] = heldFurn.id; heldFurn = null; audio(); persist(); }
+          else if (save.dreamlight >= ISO_FURN[heldFurn.id].cost) { save.dreamlight -= ISO_FURN[heldFurn.id].cost; save.denFurn[k] = heldFurn.id; audio(); toast('placed! ✦ ' + fmt(save.dreamlight) + ' left'); persist(); }
+          else toast('not enough dreamlight');
+        } else toast('that spot is taken');
+      } else if (save.denFurn[k]) { heldFurn = { id: save.denFurn[k], moving: true }; delete save.denFurn[k]; audio(); persist(); } // pick up to move (free)
+      uiTick(); return;
+    }
+    return;
+  }
   if (screenMode === 'den') {
     // room navigation arrows
     if (curRoom > 0 && p.x >= NAV_L.x && p.x <= NAV_L.x + NAV_L.w && p.y >= NAV_L.y && p.y <= NAV_L.y + NAV_L.h) { audio(); uiTick(); curRoom--; fadeFrom = performance.now(); setUI(); return; }
@@ -955,6 +991,12 @@ function setUI() {
   var inDen = (screenMode === 'den' && curRoom === 0);
   $('whisper').classList.toggle('den', inDen);         // whisper floats above the care chips in the den, above the tuck in play
   $('bar-icons').classList.toggle('hidden', !inDen);   // the compact secondary row lives only in the den
+  if (furnishMode) {   // furnish mode takes over the whole screen — the catalog + done button live on the canvas
+    ['btn-parade', 'btn-map', 'btn-tuck', 'btn-dreams', 'btn-wardrobe', 'btn-practice', 'btn-shop'].forEach(function (b) { $(b).classList.add('hidden'); });
+    $('bar-icons').classList.add('hidden'); $('care').classList.add('hidden'); $('whisper').classList.add('hidden');
+    return;
+  }
+  $('whisper').classList.remove('hidden');
   if (!save.pet) { // before a pet exists, the game holds its breath — no UI noise behind the creator
     var all = ['btn-parade', 'btn-map', 'btn-dreams', 'btn-wardrobe', 'btn-practice', 'btn-shop', 'btn-tuck'];
     for (var ai = 0; ai < all.length; ai++) $(all[ai]).classList.add('hidden');
@@ -1498,7 +1540,7 @@ $('wardrobe-put-back').addEventListener('click', function () { uiTick(); cancelP
 $('founder-redeem').addEventListener('click', function () { uiTick(); redeemFounder(); if (save.founder && wardrobeOpen) buildWardrobeList(); });
 $('founder-close').addEventListener('click', function () { uiTick(); hideOv('founder-ov'); if (wardrobeOpen) buildWardrobeList(); });
 $('btn-dreams-close').addEventListener('click', function () { uiTick(); hideOv('dreams-ov'); });
-$('btn-shop').addEventListener('click', function () { audio(); uiTick(); buildShop(); showOv('shop-ov'); });
+$('btn-shop').addEventListener('click', function () { audio(); furnishMode = true; heldFurn = null; fadeFrom = performance.now(); setUI(); });
 $('btn-shop-close').addEventListener('click', function () { uiTick(); hideOv('shop-ov'); setUI(); });
 function clearFx() { sparkles.length = 0; callouts.length = 0; hugFlyers.length = 0; calloutBusyUntil = 0; } // no effect outlives its screen
 // ---- leaving a run: never a trap. free to back out; a fair confirm only when something is actually at stake ----
@@ -2155,11 +2197,78 @@ function drawFernAt(c, x, y, sc) {
 }
 function drawCushionAt(c, x, y, sc) {
   c.save(); c.translate(x, y); c.scale(sc, sc);
-  c.fillStyle = '#5e7a9a'; c.beginPath(); c.ellipse(0, 0, 46, 20, 0, 0, 7); c.fill();
-  c.strokeStyle = '#7a96b6'; c.lineWidth = 2; c.stroke();
+  c.fillStyle = '#5e7a9a'; c.beginPath(); c.ellipse(0, 0, 34, 15, 0, 0, 7); c.fill();
+  c.fillStyle = '#7290b2'; c.beginPath(); c.ellipse(0, -3, 30, 12, 0, 0, 7); c.fill();
+  c.strokeStyle = '#96b0d0'; c.lineWidth = 1.5; c.beginPath(); c.ellipse(0, -3, 30, 12, 0, 0, 7); c.stroke();
   c.restore();
 }
-var DEN_FURN_PLOTS = { hearth: { d: 0.22, l: -0.72 }, lamp: { d: 0.28, l: 0.75 }, fern: { d: 0.5, l: -0.8 }, cushion: { d: 0.58, l: 0.62 } };
+function drawRugAt(c, x, y, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.fillStyle = '#8a4a5a'; c.beginPath(); c.ellipse(0, 0, 52, 26, 0, 0, 7); c.fill();
+  c.strokeStyle = '#a85f70'; c.lineWidth = 3; c.beginPath(); c.ellipse(0, 0, 42, 21, 0, 0, 7); c.stroke();
+  c.strokeStyle = 'rgba(255,220,200,.22)'; c.lineWidth = 2; c.beginPath(); c.ellipse(0, 0, 28, 14, 0, 0, 7); c.stroke();
+  c.restore();
+}
+function drawBedAt(c, x, y, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.fillStyle = '#4a3a64'; c.beginPath(); c.ellipse(0, 0, 42, 21, 0, 0, 7); c.fill();
+  c.fillStyle = '#6a5a86'; c.beginPath(); c.ellipse(0, -5, 42, 19, 0, 0, 7); c.fill();
+  c.fillStyle = '#c9b8e0'; c.beginPath(); c.ellipse(0, -4, 30, 13, 0, 0, 7); c.fill();
+  c.restore();
+}
+function drawTableAt(c, x, y, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.strokeStyle = '#5f4230'; c.lineWidth = 4; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-20, -2); c.lineTo(-17, -28); c.moveTo(20, -2); c.lineTo(17, -28); c.stroke();
+  c.fillStyle = '#7a5540'; c.beginPath(); c.ellipse(0, -30, 28, 9, 0, 0, 7); c.fill();
+  c.fillStyle = '#8c6650'; c.beginPath(); c.ellipse(0, -32, 28, 8, 0, 0, 7); c.fill();
+  c.restore();
+}
+function drawShelfAt(c, x, y, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.fillStyle = '#5a3f2e'; c.fillRect(-26, -92, 52, 92);
+  c.fillStyle = '#402c20'; for (var s = 0; s < 3; s++) c.fillRect(-22, -84 + s * 29, 44, 5);
+  var bc = ['#c96a5a', '#6a9ac9', '#c9a85a', '#7ac98a', '#b06ac9'];
+  for (var bk = 0; bk < 12; bk++) { c.fillStyle = bc[bk % 5]; var sh = Math.floor(bk / 4); c.fillRect(-20 + (bk % 4) * 10.5, -80 + sh * 29 - 13, 7, 15); }
+  c.restore();
+}
+function drawTallPlantAt(c, x, y, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.fillStyle = '#6a4a32'; c.beginPath(); c.moveTo(-13, 0); c.lineTo(13, 0); c.lineTo(10, -22); c.lineTo(-10, -22); c.fill();
+  c.strokeStyle = '#4a7a4e'; c.lineWidth = 5; c.lineCap = 'round';
+  for (var lf = 0; lf < 6; lf++) { var la = -2.4 + lf * 0.42; c.beginPath(); c.moveTo(0, -20); c.quadraticCurveTo(Math.cos(la) * 24, -54 + Math.sin(la) * 20, Math.cos(la) * 30, -74 + Math.sin(la) * 10); c.stroke(); }
+  c.restore();
+}
+function drawBowlAt(c, x, y, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.fillStyle = '#c96a5a'; c.beginPath(); c.ellipse(0, 0, 18, 8, 0, 0, 7); c.fill();
+  c.fillStyle = '#e08a6a'; c.beginPath(); c.ellipse(0, -2, 16, 6, 0, 0, 7); c.fill();
+  c.fillStyle = '#7a5540'; c.beginPath(); c.ellipse(0, -3, 11, 4, 0, 0, 7); c.fill();
+  c.restore();
+}
+function drawToyboxAt(c, x, y, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.fillStyle = '#5f8fc0'; c.fillRect(-22, -30, 44, 30);
+  c.fillStyle = '#77a8d8'; c.beginPath(); c.moveTo(-22, -30); c.lineTo(22, -30); c.lineTo(18, -40); c.lineTo(-18, -40); c.fill();
+  c.fillStyle = '#ffca7a'; c.beginPath(); c.arc(-7, -46, 6.5, 0, 7); c.fill();
+  c.fillStyle = '#e8879e'; c.beginPath(); c.arc(8, -44, 5.5, 0, 7); c.fill();
+  c.restore();
+}
+// the catalog you furnish from. flat items (rugs) always draw under everyone; costs are one-time-per-piece in dreamlight
+var ISO_FURN = {
+  rug: { name: 'round rug', cost: 40, flat: true, draw: drawRugAt },
+  bed: { name: 'pet bed', cost: 120, draw: drawBedAt },
+  cushion: { name: 'cushion', cost: 60, draw: drawCushionAt },
+  lamp: { name: 'floor lamp', cost: 90, draw: drawLampAt },
+  fern: { name: 'potted fern', cost: 50, draw: drawFernAt },
+  plant: { name: 'tall plant', cost: 100, draw: drawTallPlantAt },
+  table: { name: 'side table', cost: 80, draw: drawTableAt },
+  shelf: { name: 'bookshelf', cost: 160, draw: drawShelfAt },
+  hearth: { name: 'fireplace', cost: 240, draw: drawHearthAt },
+  bowl: { name: 'food bowl', cost: 25, draw: drawBowlAt },
+  toybox: { name: 'toy chest', cost: 70, draw: drawToyboxAt }
+};
+var ISO_FURN_ORDER = ['rug', 'bed', 'cushion', 'lamp', 'fern', 'plant', 'table', 'shelf', 'hearth', 'bowl', 'toybox'];
 // ---- the isometric room: a diamond floor + two back walls. flat furniture & pets stand on the tiles, depth-sorted ----
 var WALL_L = '#241a36', WALL_R = '#31254c';   // cool shadow-wall / moonlit warm-wall (two-light rule)
 function drawWallDecor(now) {} // Phase 3 hangs window + paintings here
@@ -2209,6 +2318,72 @@ function drawDenFloor(now) {
     ctx.fillStyle = 'rgba(255,228,176,' + Math.max(0, ma) + ')'; ctx.beginPath(); ctx.arc(mx, my, 1.4, 0, 7); ctx.fill();
   }
 }
+// paint one iso tile's diamond (for furnish highlights)
+function isoTileDiamond(col, row) {
+  var a = isoCorner(col, row), b = isoCorner(col + 1, row), d = isoCorner(col + 1, row + 1), e = isoCorner(col, row + 1);
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(e.x, e.y); ctx.closePath();
+}
+function drawFurnishTiles(now) {
+  var hov = screenToTile(pointerPos.x, pointerPos.y);
+  for (var cc = 0; cc < ISO_COLS; cc++) for (var rr = 0; rr < ISO_ROWS; rr++) {
+    var occupied = !!save.denFurn[tileKey(cc, rr)];
+    isoTileDiamond(cc, rr);
+    ctx.fillStyle = occupied ? 'rgba(255,150,150,.05)' : 'rgba(150,220,255,.06)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(180,220,255,.14)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  if (hov) {   // the tile you're about to act on glows
+    var pulse = 0.18 + 0.12 * Math.sin(now / 260);
+    isoTileDiamond(hov.col, hov.row);
+    ctx.fillStyle = heldFurn ? 'rgba(150,255,180,' + pulse + ')' : 'rgba(255,210,130,' + pulse + ')';
+    ctx.fill();
+    ctx.strokeStyle = heldFurn ? 'rgba(150,255,180,.6)' : 'rgba(255,210,130,.6)'; ctx.lineWidth = 2; ctx.stroke();
+    if (heldFurn && ISO_FURN[heldFurn.id]) { var t = isoTile(hov.col, hov.row); ctx.save(); ctx.globalAlpha = 0.75; ISO_FURN[heldFurn.id].draw(ctx, t.x, t.y, t.scale, now); ctx.restore(); }
+  }
+}
+function drawFurnishUI(now) {
+  furnCatRects = [];
+  // banner
+  ctx.textAlign = 'center';
+  ctx.font = "800 26px 'Baloo 2', sans-serif"; ctx.fillStyle = '#ffd9a0';
+  ctx.fillText('furnish the den', W / 2, 150);
+  ctx.font = "500 17px Fredoka, sans-serif"; ctx.fillStyle = '#b9a9c9';
+  ctx.fillText(heldFurn ? (heldFurn.moving ? 'tap a tile to set it down' : 'tap the floor to place · tap a piece to move it') : 'pick a piece, or tap one in the room to move it', W / 2, 176);
+  ctx.font = "700 18px 'Baloo 2', sans-serif"; ctx.fillStyle = '#ffca7a';
+  ctx.fillText('✦ ' + fmt(save.dreamlight), W / 2, 202);
+  // catalog strip — two rows of tappable chips, sitting just under the room
+  var n = ISO_FURN_ORDER.length, perRow = 6, cw = 108, ch = 90, gap = 8;
+  var totalW = perRow * cw + (perRow - 1) * gap, sx0 = (W - totalW) / 2, y0 = 740;
+  for (var i = 0; i < n; i++) {
+    var id = ISO_FURN_ORDER[i], it = ISO_FURN[id];
+    var col = i % perRow, rw = Math.floor(i / perRow);
+    var cx = sx0 + col * (cw + gap), cy = y0 + rw * (ch + 12);
+    var sel = heldFurn && !heldFurn.moving && heldFurn.id === id, afford = save.dreamlight >= it.cost;
+    ctx.fillStyle = sel ? 'rgba(255,210,130,.22)' : 'rgba(42,29,61,.9)';
+    roundRect(cx, cy, cw, ch, 14); ctx.fill();
+    ctx.save(); roundRect(cx, cy, cw, ch, 14); ctx.clip();   // keep tall previews inside their chip
+    ctx.globalAlpha = afford ? 1 : 0.4; it.draw(ctx, cx + cw / 2, cy + ch - 22, 0.44, now); ctx.restore();
+    ctx.strokeStyle = sel ? '#ffca7a' : (afford ? '#574371' : '#3a2f4a'); ctx.lineWidth = sel ? 3 : 1.5;
+    roundRect(cx, cy, cw, ch, 14); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.font = "700 12px 'Baloo 2', sans-serif"; ctx.fillStyle = afford ? '#ffca7a' : '#6d6080';
+    ctx.fillText('✦ ' + it.cost, cx + cw / 2, cy + ch - 6);
+    furnCatRects.push({ x: cx, y: cy, w: cw, h: ch, id: id });
+  }
+  // done + (when holding) trash
+  var bw = 150, bh = 46, by = 740 + 2 * ch + 12 + 14;
+  furnDoneRect = { x: W / 2 - bw / 2, y: by, w: bw, h: bh };
+  ctx.fillStyle = '#ffca7a'; roundRect(furnDoneRect.x, furnDoneRect.y, bw, bh, 14); ctx.fill();
+  ctx.fillStyle = '#4a2c08'; ctx.font = "800 17px 'Baloo 2', sans-serif"; ctx.textAlign = 'center';
+  ctx.fillText('✓ done', W / 2, by + 29);
+  if (heldFurn) {
+    furnTrashRect = { x: W / 2 + bw / 2 + 12, y: by, w: 52, h: bh };
+    ctx.fillStyle = '#3a2b50'; roundRect(furnTrashRect.x, furnTrashRect.y, 52, bh, 14); ctx.fill();
+    ctx.strokeStyle = '#574371'; ctx.lineWidth = 1.5; roundRect(furnTrashRect.x, furnTrashRect.y, 52, bh, 14); ctx.stroke();
+    ctx.fillStyle = '#e8b4c8'; ctx.font = "22px 'Segoe UI'"; ctx.fillText('🗑', furnTrashRect.x + 26, by + 30);
+  } else furnTrashRect = null;
+  ctx.textAlign = 'left';
+}
 function renderDenRoom(now) {
   twoLightSky(now, W - 150, 130);
   if (save.founder) { // a soft golden aurora — the founder's den glows
@@ -2216,10 +2391,14 @@ function renderDenRoom(now) {
     ctx.fillStyle = au; ctx.fillRect(0, 55, W, 170);
   }
   drawDenFloor(now);
+  if (furnishMode) drawFurnishTiles(now);   // faint tile grid + the hovered tile, under everything
   // ---- everyone on the floor, DEPTH-SORTED so back draws behind front (the core 2.5D trick) ----
   var jobs = [];
-  var furnKeys = { hearth: drawHearthAt, lamp: drawLampAt, fern: drawFernAt, cushion: drawCushionAt };
-  for (var fk in furnKeys) if (save.furniture[fk]) { var fp2 = DEN_FURN_PLOTS[fk], fpr = denProject(fp2.d, fp2.l); (function (fn, x, y, sc) { jobs.push({ depth: y, draw: function () { fn(ctx, x, y, sc, now); } }); })(furnKeys[fk], fpr.x, fpr.y, fpr.scale); }
+  for (var fkey in save.denFurn) {   // placed furniture — each on its tile, flat items sink under the critters
+    var _p = fkey.split('_'), it = ISO_FURN[save.denFurn[fkey]]; if (!it) continue;
+    var t = isoTile(+_p[0], +_p[1]);
+    (function (fn, x, y, sc, flat) { jobs.push({ depth: flat ? -1e6 : y, draw: function () { fn(ctx, x, y, sc, now); } }); })(it.draw, t.x, t.y, t.scale, it.flat);
+  }
   if (save.pet) {
     if (!petWander) petWander = wanderInit(0.66, 0);
     wanderTick(petWander, now, 1200, PET_WP);
@@ -2373,6 +2552,7 @@ function renderDenRoom(now) {
   var homeSuffix = line3.length ? ' — all home.' : '';
   if (save.founder) line3.push('💛 founder');
   if (line3.length) { ctx.font = "500 17px Fredoka, sans-serif"; ctx.fillText(line3.join(' · ') + homeSuffix, 26, 110); }
+  if (furnishMode) drawFurnishUI(now);   // catalog strip + held piece + done/trash, drawn on top of everything
 }
 function renderPlay(now) {
   ctx.save();
