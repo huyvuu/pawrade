@@ -238,8 +238,8 @@ function drawPet(c, breed, coatIdx, x, y, r, o) {
     c.restore();
     return;
   }
-  var headRx = (st === 3) ? 14.6 * e : 13.4 * e;   // stage 3 = wider, loafier
-  var headRy = (st === 3) ? 13.6 * e : 12.8 * e;
+  var headRx = (st === 3) ? 14.8 * e : 13.6 * e;   // stage 3 = wider, loafier
+  var headRy = (st === 3) ? 14.2 * e : 13.6 * e;   // rounder head = babyish = cuter
 
   if (st === 3) { // majesty halo floof
     c.fillStyle = C1; c.globalAlpha = 0.25;
@@ -291,51 +291,56 @@ function drawPet(c, breed, coatIdx, x, y, r, o) {
     if (st === 3) { c.beginPath(); c.moveTo(-headRx + 1 * e, 2 * e); c.lineTo(-headRx + 4.5 * e, 2 * e); c.stroke(); c.beginPath(); c.moveTo(headRx - 1 * e, 2 * e); c.lineTo(headRx - 4.5 * e, 2 * e); c.stroke(); } }
   if (breed === 'tux') { c.fillStyle = '#fdf3e0'; c.beginPath(); c.moveTo(-6 * e, 4 * e); c.quadraticCurveTo(0, -1 * e, 6 * e, 4 * e); c.quadraticCurveTo(5 * e, 12 * e, 0, 13 * e); c.quadraticCurveTo(-5 * e, 12 * e, -6 * e, 4 * e); c.fill();
     if (st === 3) { c.strokeStyle = '#fdf3e0'; c.lineWidth = 1.4 * e; c.beginPath(); c.moveTo(-3 * e, 15 * e); c.lineTo(0, 17.5 * e); c.lineTo(3 * e, 15 * e); c.stroke(); } } // the chairman's little bowtie
-  // eyes
-  var eyeY = -1.4 * e, gap = 5.6 * e, er = 2.1 * e;
+  // eyes — big, round and glossy: the single biggest 'aww' lever. low-set + wide = babyish
+  var eyeY = -0.2 * e, gap = 6.3 * e, er = 3.35 * e;
   var px = (o.pupil ? o.pupil.x : 0) * 0.9 * e, py = (o.pupil ? o.pupil.y : 0) * 0.9 * e;
   var serene = (st === 3) && !o.sleeping && !o.sad;
+  var gloss = function (cx, cy) { // two catchlights make the eye read wet and alive
+    c.fillStyle = 'rgba(255,255,255,.95)'; c.beginPath(); c.arc(cx + er * 0.32, cy - er * 0.42, er * 0.44, 0, 7); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.6)'; c.beginPath(); c.arc(cx - er * 0.38, cy + er * 0.34, er * 0.2, 0, 7); c.fill();
+  };
   if (o.sleeping) {
-    c.strokeStyle = ink; c.lineWidth = 1.7 * e; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(-gap - 2 * e, eyeY + e); c.quadraticCurveTo(-gap, eyeY + 2.6 * e, -gap + 2 * e, eyeY + e); c.stroke();
-    c.beginPath(); c.moveTo(gap - 2 * e, eyeY + e); c.quadraticCurveTo(gap, eyeY + 2.6 * e, gap + 2 * e, eyeY + e); c.stroke();
+    c.strokeStyle = ink; c.lineWidth = 2 * e; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-gap - 2.4 * e, eyeY + e); c.quadraticCurveTo(-gap, eyeY + 3.2 * e, -gap + 2.4 * e, eyeY + e); c.stroke();
+    c.beginPath(); c.moveTo(gap - 2.4 * e, eyeY + e); c.quadraticCurveTo(gap, eyeY + 3.2 * e, gap + 2.4 * e, eyeY + e); c.stroke();
   } else if (serene) {
-    c.strokeStyle = ink; c.lineWidth = Math.max(2, r * 0.07); c.lineCap = 'round';
-    c.beginPath(); c.arc(-gap, eyeY, er, Math.PI * 1.12, Math.PI * 1.88); c.stroke();
-    c.beginPath(); c.arc(gap, eyeY, er, Math.PI * 1.12, Math.PI * 1.88); c.stroke();
+    c.strokeStyle = ink; c.lineWidth = Math.max(2, r * 0.075); c.lineCap = 'round';
+    c.beginPath(); c.arc(-gap, eyeY, er, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+    c.beginPath(); c.arc(gap, eyeY, er, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
   } else if (breed === 'tux' || breed === 'voidcat') {
     var ec = (breed === 'voidcat') ? '#ffd76e' : '#ffe08a';
     var blL = o.blinkL && breed !== 'voidcat', blR = o.blinkR && breed !== 'voidcat';
     c.fillStyle = ec;
-    if (!blL) { c.beginPath(); c.ellipse(-gap, eyeY, er, er * 1.15, 0, 0, 7); c.fill(); }
-    if (!blR) { c.beginPath(); c.ellipse(gap, eyeY, er, er * 1.15, 0, 0, 7); c.fill(); }
+    if (!blL) { c.beginPath(); c.ellipse(-gap, eyeY, er * 0.94, er * 1.12, 0, 0, 7); c.fill(); }
+    if (!blR) { c.beginPath(); c.ellipse(gap, eyeY, er * 0.94, er * 1.12, 0, 0, 7); c.fill(); }
     c.fillStyle = '#131019';
-    if (!blL) { c.beginPath(); c.arc(-gap + px, eyeY + py, er * 0.45, 0, 7); c.fill(); }
-    if (!blR) { c.beginPath(); c.arc(gap + px, eyeY + py, er * 0.45, 0, 7); c.fill(); }
+    if (!blL) { c.beginPath(); c.ellipse(-gap + px, eyeY + py, er * 0.5, er * 0.74, 0, 0, 7); c.fill(); }
+    if (!blR) { c.beginPath(); c.ellipse(gap + px, eyeY + py, er * 0.5, er * 0.74, 0, 0, 7); c.fill(); }
+    if (!blL) gloss(-gap + px * 0.6, eyeY + py * 0.6);
+    if (!blR) gloss(gap + px * 0.6, eyeY + py * 0.6);
   } else {
-    c.fillStyle = ink;
-    if (o.blinkL) { c.strokeStyle = ink; c.lineWidth = 1.6 * e; c.beginPath(); c.moveTo(-gap - 1.8 * e, eyeY); c.lineTo(-gap + 1.8 * e, eyeY); c.stroke(); }
-    else { c.beginPath(); c.arc(-gap + px, eyeY + py, er, 0, 7); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.arc(-gap + px + 0.7 * e, eyeY + py - 0.7 * e, 0.7 * e, 0, 7); c.fill(); c.fillStyle = ink; }
-    if (o.blinkR) { c.strokeStyle = ink; c.lineWidth = 1.6 * e; c.beginPath(); c.moveTo(gap - 1.8 * e, eyeY); c.lineTo(gap + 1.8 * e, eyeY); c.stroke(); }
-    else { c.beginPath(); c.arc(gap + px, eyeY + py, er, 0, 7); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.arc(gap + px + 0.7 * e, eyeY + py - 0.7 * e, 0.7 * e, 0, 7); c.fill(); }
+    if (o.blinkL) { c.strokeStyle = ink; c.lineWidth = 1.9 * e; c.lineCap = 'round'; c.beginPath(); c.moveTo(-gap - 2.2 * e, eyeY - 0.3 * e); c.quadraticCurveTo(-gap, eyeY + 1.5 * e, -gap + 2.2 * e, eyeY - 0.3 * e); c.stroke(); }
+    else { c.fillStyle = ink; c.beginPath(); c.ellipse(-gap + px, eyeY + py, er * 0.92, er, 0, 0, 7); c.fill(); gloss(-gap + px, eyeY + py); }
+    if (o.blinkR) { c.strokeStyle = ink; c.lineWidth = 1.9 * e; c.lineCap = 'round'; c.beginPath(); c.moveTo(gap - 2.2 * e, eyeY - 0.3 * e); c.quadraticCurveTo(gap, eyeY + 1.5 * e, gap + 2.2 * e, eyeY - 0.3 * e); c.stroke(); }
+    else { c.fillStyle = ink; c.beginPath(); c.ellipse(gap + px, eyeY + py, er * 0.92, er, 0, 0, 7); c.fill(); gloss(gap + px, eyeY + py); }
   }
-  // blush
+  // blush — big rosy cheeks, low on the face
   if (!o.sleeping) {
-    c.fillStyle = (breed === 'frenchie') ? 'rgba(224,164,180,.55)' : 'rgba(240,144,106,.5)';
-    c.beginPath(); c.arc(-9.6 * e, 4.4 * e, 2.5 * e, 0, 7); c.fill();
-    c.beginPath(); c.arc(9.6 * e, 4.4 * e, 2.5 * e, 0, 7); c.fill();
+    c.fillStyle = (breed === 'frenchie') ? 'rgba(232,150,172,.5)' : 'rgba(246,150,112,.46)';
+    c.beginPath(); c.ellipse(-9.9 * e, 5.8 * e, 3.4 * e, 2.5 * e, 0, 0, 7); c.fill();
+    c.beginPath(); c.ellipse(9.9 * e, 5.8 * e, 3.4 * e, 2.5 * e, 0, 0, 7); c.fill();
   }
-  // nose + mouth
+  // nose + mouth — sit low under the big eyes
   var isDog = (breed === 'corgi' || breed === 'shiba' || breed === 'frenchie');
   c.fillStyle = (breed === 'frenchie') ? '#33254a' : ((breed === 'tux' || breed === 'voidcat' || breed === 'tabby') ? '#f0906a' : '#4a3010');
-  c.beginPath(); c.ellipse(0, 3.6 * e, isDog ? 2.3 * e : 1.5 * e, isDog ? 1.8 * e : 1.2 * e, 0, 0, 7); c.fill();
+  c.beginPath(); c.ellipse(0, 5.6 * e, isDog ? 2.4 * e : 1.6 * e, isDog ? 1.9 * e : 1.3 * e, 0, 0, 7); c.fill();
   c.strokeStyle = ink; c.lineWidth = 1.4 * e; c.lineCap = 'round';
-  if (o.sad) { c.beginPath(); c.moveTo(-2.6 * e, 8.6 * e); c.quadraticCurveTo(0, 6.6 * e, 2.6 * e, 8.6 * e); c.stroke(); }
-  else if (o.sleeping) { c.beginPath(); c.moveTo(-1.6 * e, 7.6 * e); c.quadraticCurveTo(0, 8.6 * e, 1.6 * e, 7.6 * e); c.stroke(); }
+  if (o.sad) { c.beginPath(); c.moveTo(-2.6 * e, 10.6 * e); c.quadraticCurveTo(0, 8.6 * e, 2.6 * e, 10.6 * e); c.stroke(); }
+  else if (o.sleeping) { c.beginPath(); c.moveTo(-1.6 * e, 9.6 * e); c.quadraticCurveTo(0, 10.6 * e, 1.6 * e, 9.6 * e); c.stroke(); }
   else {
-    c.beginPath(); c.moveTo(0, 5.2 * e); c.quadraticCurveTo(0, 7 * e, -2.6 * e, 7.4 * e); c.stroke();
-    c.beginPath(); c.moveTo(0, 5.2 * e); c.quadraticCurveTo(0, 7 * e, 2.6 * e, 7.4 * e); c.stroke();
-    if (isDog) { c.fillStyle = '#f0906a'; c.beginPath(); c.moveTo(-1.8 * e, 8.2 * e); c.quadraticCurveTo(0, 11.4 * e, 1.8 * e, 8.2 * e); c.closePath(); c.fill(); }
+    c.beginPath(); c.moveTo(0, 7.2 * e); c.quadraticCurveTo(0, 9 * e, -2.6 * e, 9.4 * e); c.stroke();
+    c.beginPath(); c.moveTo(0, 7.2 * e); c.quadraticCurveTo(0, 9 * e, 2.6 * e, 9.4 * e); c.stroke();
+    if (isDog) { c.fillStyle = '#f0906a'; c.beginPath(); c.moveTo(-1.8 * e, 10.2 * e); c.quadraticCurveTo(0, 13.4 * e, 1.8 * e, 10.2 * e); c.closePath(); c.fill(); }
   }
   if (breed === 'tabby' && st < 3) {
     c.strokeStyle = 'rgba(74,48,16,.6)'; c.lineWidth = 0.9 * e;
@@ -382,13 +387,14 @@ function denProject(depth, lateral) {
   var hw = DEN_FLOOR_TOPHW + depth * (DEN_FLOOR_BOTHW - DEN_FLOOR_TOPHW);
   return { x: W / 2 + lateral * hw, y: y, scale: 0.58 + depth * 0.62 };
 }
-// each roamer picks waypoints from its own zone only. the pet's sprite is huge up front (r scales with depth), so
-// everyone else is kept in a shallow back band whose worst-case footprint still clears the pet's worst-case reach —
-// keeps the pet, both graduates and the rescue from ever visually converging on the same spot
-var PET_WP = [{ d: 0.87, l: 0 }, { d: 0.84, l: 0.07 }, { d: 0.88, l: -0.06 }, { d: 0.85, l: 0.04 }];
-var GRAD_L_WP = [{ d: 0.24, l: -0.65 }, { d: 0.27, l: -0.7 }, { d: 0.22, l: -0.6 }, { d: 0.26, l: -0.68 }];
-var GRAD_R_WP = [{ d: 0.24, l: 0.65 }, { d: 0.27, l: 0.7 }, { d: 0.22, l: 0.6 }, { d: 0.26, l: 0.68 }];
-var RESCUE_WP = [{ d: 0.28, l: 0 }, { d: 0.3, l: 0.07 }, { d: 0.26, l: -0.06 }, { d: 0.29, l: 0.04 }];
+// each roamer picks waypoints from its own zone only. the PET owns the centre column as the hero (mid-depth so its
+// floating name has clear sky above and its chin clears the whisper below); everyone else lives in the back band,
+// pushed to the LEFT/RIGHT so they never share the pet's centre column — no sprite or label ever converges.
+var PET_WP = [{ d: 0.66, l: 0 }, { d: 0.63, l: 0.05 }, { d: 0.69, l: -0.05 }, { d: 0.65, l: 0.03 }];
+// graduates keep to the LEFT (one far-back corner, one mid-forward), the rescue owns the RIGHT — pet owns centre.
+var GRAD_L_WP = [{ d: 0.23, l: -0.68 }, { d: 0.26, l: -0.74 }, { d: 0.22, l: -0.62 }, { d: 0.25, l: -0.72 }];
+var GRAD_R_WP = [{ d: 0.34, l: -0.42 }, { d: 0.37, l: -0.46 }, { d: 0.32, l: -0.38 }, { d: 0.36, l: -0.44 }];
+var RESCUE_WP = [{ d: 0.31, l: 0.44 }, { d: 0.33, l: 0.5 }, { d: 0.29, l: 0.38 }, { d: 0.32, l: 0.46 }];
 function wanderInit(d0, l0) { return { d: d0, l: l0, fromD: d0, fromL: l0, toD: d0, toL: l0, t0: 0, dur: 1, pauseUntil: 0, moving: false }; }
 function wanderTick(w, now, stagger, wp0) {
   wp0 = wp0 || PET_WP;
@@ -2192,7 +2198,7 @@ function renderDenRoom(now) {
   var furnKeys = { hearth: drawHearthAt, lamp: drawLampAt, fern: drawFernAt, cushion: drawCushionAt };
   for (var fk in furnKeys) if (save.furniture[fk]) { var fp2 = DEN_FURN_PLOTS[fk], fpr = denProject(fp2.d, fp2.l); (function (fn, x, y, sc) { jobs.push({ depth: fp2.d, draw: function () { fn(ctx, x, y, sc, now); } }); })(furnKeys[fk], fpr.x, fpr.y, fpr.scale); }
   if (save.pet) {
-    if (!petWander) petWander = wanderInit(0.86, 0);
+    if (!petWander) petWander = wanderInit(0.66, 0);
     wanderTick(petWander, now, 1200, PET_WP);
     var pp = denProject(petWander.d, petWander.l);
     (function (px, py, psc) {
@@ -2248,12 +2254,12 @@ function renderDenRoom(now) {
         }
         ctx.font = "700 " + Math.round(28 * Math.max(psc, 0.82)) + "px 'Baloo 2', sans-serif"; ctx.textAlign = 'center';
         ctx.fillStyle = '#ffd9a0';
-        var nameY = py2 - r * 1.28;
+        var nameY = py2 - r * 1.74;   // clears the pet's ears + breath so the label always floats in clear sky above the head
         ctx.fillText(save.pet.name + (bday ? ' 🎂' : (sleeping ? ' 💤' : '')), px, nameY);
-        if (bday) { ctx.font = "500 20px Caveat, cursive"; ctx.fillStyle = '#e8b4c8'; ctx.fillText('happy gotcha day, ' + save.pet.name + '!', px, nameY + 24); }
+        if (bday) { ctx.font = "500 20px Caveat, cursive"; ctx.fillStyle = '#e8b4c8'; ctx.fillText('happy gotcha day, ' + save.pet.name + '!', px, nameY + 26); }
         else { var moodWord = mood >= 85 ? 'over the moon' : mood >= 68 ? 'happy as can be' : mood >= 52 ? 'cozy' : 'ready for a cuddle';
           ctx.font = "500 16px Fredoka, sans-serif"; ctx.fillStyle = '#b9a9c9';
-          ctx.fillText(moodWord + (save.pet.bond > 0 ? '   ·   💛 ' + save.pet.bond : ''), px, nameY + 24);
+          ctx.fillText(moodWord + (save.pet.bond > 0 ? '   ·   💛 ' + save.pet.bond : ''), px, nameY + 26);
         }
       } });
     })(pp.x, pp.y, pp.scale);
@@ -2263,7 +2269,7 @@ function renderDenRoom(now) {
   for (li2 = 0; li2 < LEGENDS.length; li2++) if (save.legends[LEGENDS[li2].id]) denPool.push({ legend: LEGENDS[li2] });
   for (b in save.graduates) denPool.push({ breed: b, coat: save.rareGrads[b] || 0 });
   for (var gi = 0; gi < Math.min(2, denPool.length); gi++) {
-    if (!gradWander[gi]) gradWander[gi] = wanderInit(0.25, gi === 0 ? -0.65 : 0.65);
+    if (!gradWander[gi]) gradWander[gi] = wanderInit(gi === 0 ? 0.23 : 0.34, gi === 0 ? -0.7 : -0.42);
     wanderTick(gradWander[gi], now, 2000 + gi * 900, gi === 0 ? GRAD_L_WP : GRAD_R_WP);
     var gp = denProject(gradWander[gi].d, gradWander[gi].l), dp = denPool[gi], soulG = gi === 0 ? denSouls.g0 : denSouls.g1;
     (function (gx, gy, gsc, dp, soul, idx) {
@@ -2288,7 +2294,7 @@ function renderDenRoom(now) {
     for (fri = 0; fri < save.rescues.length; fri++) if (save.rescues[fri].trust < 100) { featR = save.rescues[fri]; featI = fri; break; }
     if (!featR) { featI = save.rescues.length - 1; featR = save.rescues[featI]; }
     curFeaturedRescue = featI;
-    if (!rescueWander) rescueWander = wanderInit(0.28, 0);
+    if (!rescueWander) rescueWander = wanderInit(0.29, 0.4);
     var rstage0 = rescueStage(featR.trust);
     if (rstage0 >= 2) wanderTick(rescueWander, now, 2600, RESCUE_WP); // shy stages stay put near their spot; confident ones wander
     var rp2 = denProject(rescueWander.d, rescueWander.l);
