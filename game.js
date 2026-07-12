@@ -380,12 +380,17 @@ var petIdle = null, petIdleNext = 0;                 // den pet autonomous idle 
 // ============ THE DEN, IN 2.5D ============
 // a pseudo-perspective floor: depth 0 (far/back wall) .. 1 (near/front). true WebGL 3D would break the
 // single-file zero-dep law, so this is the classic mobile-game trick — flat sprites that move & scale on
-// a projected floor plane, depth-sorted so "further back" always draws behind "closer."
-var DEN_FLOOR_TOPY = 330, DEN_FLOOR_BOTY = 900, DEN_FLOOR_TOPHW = 175, DEN_FLOOR_BOTHW = 430;
+// ---- the den is an ISOMETRIC room: a diamond floor grid you furnish, seen from a cozy 3/4 angle ----
+// everything (floor, furniture, pets) is depth-sorted by screen-Y so "further back" always draws behind "closer."
+var ISO_CX = 360, ISO_TOPY = 300, ISO_HW = 302, ISO_HH = 159, ISO_COLS = 7, ISO_ROWS = 7, ISO_WALLH = 168;
+var ISO_AX = ISO_HW / ISO_COLS, ISO_AY = ISO_HH / ISO_ROWS;   // half-extents of one tile
+function isoCorner(c, r) { return { x: ISO_CX + (c - r) * ISO_AX, y: ISO_TOPY + (c + r) * ISO_AY }; }        // a grid-line crossing
+function isoTile(col, row) { return { x: ISO_CX + (col - row) * ISO_AX, y: ISO_TOPY + (col + row + 1) * ISO_AY, scale: 0.6 + (col + row) / (2 * (ISO_COLS - 1)) * 0.62 }; } // a tile CENTRE
+// pets roam continuously; map their (depth 0..1, lateral -1..1) onto fractional (col,row) so they stand ON the iso floor
 function denProject(depth, lateral) {
-  var y = DEN_FLOOR_TOPY + depth * (DEN_FLOOR_BOTY - DEN_FLOOR_TOPY);
-  var hw = DEN_FLOOR_TOPHW + depth * (DEN_FLOOR_BOTHW - DEN_FLOOR_TOPHW);
-  return { x: W / 2 + lateral * hw, y: y, scale: 0.58 + depth * 0.62 };
+  var mid = depth * (ISO_COLS - 1), sp = lateral * (ISO_COLS - 1) * 0.5;
+  var col = Math.max(0, Math.min(ISO_COLS - 1, mid + sp)), row = Math.max(0, Math.min(ISO_ROWS - 1, mid - sp));
+  return { x: ISO_CX + (col - row) * ISO_AX, y: ISO_TOPY + (col + row + 1) * ISO_AY, scale: 0.58 + (col + row) / (2 * (ISO_COLS - 1)) * 0.62 };
 }
 // each roamer picks waypoints from its own zone only. the PET owns the centre column as the hero (mid-depth so its
 // floating name has clear sky above and its chin clears the whisper below); everyone else lives in the back band,
@@ -2155,36 +2160,54 @@ function drawCushionAt(c, x, y, sc) {
   c.restore();
 }
 var DEN_FURN_PLOTS = { hearth: { d: 0.22, l: -0.72 }, lamp: { d: 0.28, l: 0.75 }, fern: { d: 0.5, l: -0.8 }, cushion: { d: 0.58, l: 0.62 } };
-// ---- the floor + walls: a pseudo-3D room. flat sprites move & scale on this projected plane — no WebGL needed ----
+// ---- the isometric room: a diamond floor + two back walls. flat furniture & pets stand on the tiles, depth-sorted ----
+var WALL_L = '#241a36', WALL_R = '#31254c';   // cool shadow-wall / moonlit warm-wall (two-light rule)
+function drawWallDecor(now) {} // Phase 3 hangs window + paintings here
 function drawDenFloor(now) {
-  var backL = W / 2 - DEN_FLOOR_TOPHW, backR = W / 2 + DEN_FLOOR_TOPHW, frontL = W / 2 - DEN_FLOOR_BOTHW, frontR = W / 2 + DEN_FLOOR_BOTHW;
-  var wg = ctx.createLinearGradient(0, 180, 0, DEN_FLOOR_TOPY); wg.addColorStop(0, '#2c2044'); wg.addColorStop(1, '#241a38');
-  ctx.fillStyle = wg; ctx.fillRect(0, 180, W, DEN_FLOOR_TOPY - 180 + 4);
-  ctx.fillStyle = '#20172c';
-  ctx.beginPath(); ctx.moveTo(0, 180); ctx.lineTo(backL, DEN_FLOOR_TOPY); ctx.lineTo(0, DEN_FLOOR_TOPY); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(W, 180); ctx.lineTo(backR, DEN_FLOOR_TOPY); ctx.lineTo(W, DEN_FLOOR_TOPY); ctx.fill();
   var flick = 0.85 + 0.15 * Math.sin(now / 340) * Math.sin(now / 190);
-  ctx.fillStyle = '#4a3260'; ctx.fillRect(106, 232, 9, 98);
-  ctx.fillStyle = '#ffca7a'; ctx.globalAlpha = flick; ctx.fillRect(97, 200, 28, 34); ctx.globalAlpha = 1;
-  ctx.fillStyle = '#4a3260'; ctx.fillRect(94, 194, 34, 8);
-  var fg = ctx.createLinearGradient(0, DEN_FLOOR_TOPY, 0, DEN_FLOOR_BOTY); fg.addColorStop(0, '#382a4a'); fg.addColorStop(1, '#2a1f3c');
+  var top = isoCorner(0, 0), right = isoCorner(ISO_COLS, 0), bottom = isoCorner(ISO_COLS, ISO_ROWS), left = isoCorner(0, ISO_ROWS);
+  var wtop = ISO_TOPY - ISO_WALLH;
+  // room-top band above the walls (keeps the twoLightSky stars behind it readable up top, wall below)
+  var sg = ctx.createLinearGradient(0, 150, 0, ISO_TOPY); sg.addColorStop(0, '#221933'); sg.addColorStop(1, '#2a2040');
+  ctx.fillStyle = sg; ctx.fillRect(0, 150, W, ISO_TOPY - 150 + 4);
+  // dark surround outside the room footprint, so the two walls read as clean edges
+  ctx.fillStyle = '#181125';
+  ctx.beginPath(); ctx.moveTo(0, 150); ctx.lineTo(0, left.y + 30); ctx.lineTo(left.x, left.y + 30); ctx.lineTo(left.x, left.y - ISO_WALLH); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(W, 150); ctx.lineTo(W, right.y + 30); ctx.lineTo(right.x, right.y + 30); ctx.lineTo(right.x, right.y - ISO_WALLH); ctx.closePath(); ctx.fill();
+  // LEFT back wall (cool, in shadow)
+  ctx.fillStyle = WALL_L;
+  ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(left.x, left.y); ctx.lineTo(left.x, left.y - ISO_WALLH); ctx.lineTo(top.x, top.y - ISO_WALLH); ctx.closePath(); ctx.fill();
+  // RIGHT back wall (moonlit, warmer) + a soft top-down light wash
+  ctx.fillStyle = WALL_R;
+  ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(right.x, right.y); ctx.lineTo(right.x, right.y - ISO_WALLH); ctx.lineTo(top.x, top.y - ISO_WALLH); ctx.closePath(); ctx.fill();
+  var rwash = ctx.createLinearGradient(top.x, wtop, right.x, right.y); rwash.addColorStop(0, 'rgba(255,214,150,.10)'); rwash.addColorStop(1, 'rgba(255,214,150,0)');
+  ctx.fillStyle = rwash; ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(right.x, right.y); ctx.lineTo(right.x, right.y - ISO_WALLH); ctx.lineTo(top.x, top.y - ISO_WALLH); ctx.closePath(); ctx.fill();
+  // back vertical seam + skirting boards where walls meet floor
+  ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(top.x, top.y - ISO_WALLH); ctx.lineTo(top.x, top.y); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,240,210,.10)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(left.x, left.y); ctx.lineTo(top.x, top.y); ctx.lineTo(right.x, right.y); ctx.stroke();
+  drawWallDecor(now);
+  // FLOOR diamond
+  var fg = ctx.createLinearGradient(0, top.y, 0, bottom.y); fg.addColorStop(0, '#3a2c4e'); fg.addColorStop(1, '#2b2040');
   ctx.fillStyle = fg;
-  ctx.beginPath(); ctx.moveTo(backL, DEN_FLOOR_TOPY); ctx.lineTo(backR, DEN_FLOOR_TOPY); ctx.lineTo(frontR, DEN_FLOOR_BOTY); ctx.lineTo(frontL, DEN_FLOOR_BOTY); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.045)'; ctx.lineWidth = 2;
-  for (var sl = -3; sl <= 3; sl++) { var lp0 = denProject(0, sl / 3.4), lp1 = denProject(1, sl / 3.4); ctx.beginPath(); ctx.moveTo(lp0.x, lp0.y); ctx.lineTo(lp1.x, lp1.y); ctx.stroke(); }
-  var lg = ctx.createRadialGradient(W / 2, DEN_FLOOR_BOTY - 60, 30, W / 2, DEN_FLOOR_BOTY - 60, 480);
-  lg.addColorStop(0, 'rgba(255,202,122,' + 0.26 * flick + ')'); lg.addColorStop(1, 'rgba(255,158,94,0)');
-  ctx.fillStyle = lg; ctx.fillRect(0, DEN_FLOOR_TOPY, W, H - DEN_FLOOR_TOPY);
+  ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(right.x, right.y); ctx.lineTo(bottom.x, bottom.y); ctx.lineTo(left.x, left.y); ctx.closePath(); ctx.fill();
+  // subtle iso grid so the furnishable tiles read
+  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1.5;
+  for (var g = 0; g <= ISO_COLS; g++) { var a = isoCorner(g, 0), b2 = isoCorner(g, ISO_ROWS); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke(); }
+  for (var g2 = 0; g2 <= ISO_ROWS; g2++) { var a2 = isoCorner(0, g2), b3 = isoCorner(ISO_COLS, g2); ctx.beginPath(); ctx.moveTo(a2.x, a2.y); ctx.lineTo(b3.x, b3.y); ctx.stroke(); }
+  // warm pool of lamplight on the floor, clipped to the diamond
+  var lc = isoTile(3, 3), lg = ctx.createRadialGradient(lc.x, lc.y, 24, lc.x, lc.y, 300);
+  lg.addColorStop(0, 'rgba(255,202,122,' + (0.22 * flick) + ')'); lg.addColorStop(1, 'rgba(255,158,94,0)');
+  ctx.save(); ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(right.x, right.y); ctx.lineTo(bottom.x, bottom.y); ctx.lineTo(left.x, left.y); ctx.closePath(); ctx.clip();
+  ctx.fillStyle = lg; ctx.fillRect(0, top.y, W, bottom.y - top.y); ctx.restore();
   drawFireflies(now);
   for (var dm = 0; dm < 8; dm++) {
-    var mx = 60 + (dm * 91) % 600 + Math.sin(now / 2100 + dm * 1.3) * 22;
-    var my = DEN_FLOOR_BOTY - 140 - ((now / 32 + dm * 96) % 520);
-    var ma = 0.10 + 0.09 * Math.sin(now / 850 + dm * 2.1);
-    ctx.fillStyle = 'rgba(255,228,176,' + Math.max(0, ma) + ')'; ctx.beginPath(); ctx.arc(mx, my, 1.5, 0, 7); ctx.fill();
+    var mx = 150 + (dm * 61) % 440 + Math.sin(now / 2100 + dm * 1.3) * 20;
+    var my = bottom.y - 30 - ((now / 32 + dm * 70) % 340);
+    var ma = 0.08 + 0.08 * Math.sin(now / 850 + dm * 2.1);
+    ctx.fillStyle = 'rgba(255,228,176,' + Math.max(0, ma) + ')'; ctx.beginPath(); ctx.arc(mx, my, 1.4, 0, 7); ctx.fill();
   }
-  var rugP = denProject(0.86, 0);
-  ctx.fillStyle = '#8a4a5a'; ctx.beginPath(); ctx.ellipse(rugP.x, rugP.y, 150 * rugP.scale, 26 * rugP.scale, 0, 0, 7); ctx.fill();
-  ctx.strokeStyle = '#a85f70'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(rugP.x, rugP.y, 128 * rugP.scale, 20 * rugP.scale, 0, 0, 7); ctx.stroke();
 }
 function renderDenRoom(now) {
   twoLightSky(now, W - 150, 130);
@@ -2196,13 +2219,13 @@ function renderDenRoom(now) {
   // ---- everyone on the floor, DEPTH-SORTED so back draws behind front (the core 2.5D trick) ----
   var jobs = [];
   var furnKeys = { hearth: drawHearthAt, lamp: drawLampAt, fern: drawFernAt, cushion: drawCushionAt };
-  for (var fk in furnKeys) if (save.furniture[fk]) { var fp2 = DEN_FURN_PLOTS[fk], fpr = denProject(fp2.d, fp2.l); (function (fn, x, y, sc) { jobs.push({ depth: fp2.d, draw: function () { fn(ctx, x, y, sc, now); } }); })(furnKeys[fk], fpr.x, fpr.y, fpr.scale); }
+  for (var fk in furnKeys) if (save.furniture[fk]) { var fp2 = DEN_FURN_PLOTS[fk], fpr = denProject(fp2.d, fp2.l); (function (fn, x, y, sc) { jobs.push({ depth: y, draw: function () { fn(ctx, x, y, sc, now); } }); })(furnKeys[fk], fpr.x, fpr.y, fpr.scale); }
   if (save.pet) {
     if (!petWander) petWander = wanderInit(0.66, 0);
     wanderTick(petWander, now, 1200, PET_WP);
     var pp = denProject(petWander.d, petWander.l);
     (function (px, py, psc) {
-      jobs.push({ depth: petWander.d, draw: function () {
+      jobs.push({ depth: py, draw: function () {
         var s = denSouls.pet; s.tick(now);
         var mood = petMood(), happy = mood > 68;
         var sleeping = isNight() && (now - petPopT > 6000) && mood < 55 && !petWander.moving;
@@ -2222,7 +2245,7 @@ function renderDenRoom(now) {
           else if (petIdle.kind === 'yawn' && ip < 850) iSleep = true;
           if (ip > 1100) petIdle = null;
         }
-        var r = 124 * psc;
+        var r = 82 * psc;   // room-critter scale — the den is a populated home now, not a single-hero portrait
         if (happy && !sleeping) { var mi = (mood - 68) / 32, mg = ctx.createRadialGradient(px, py - r * 0.3, 20 * psc, px, py - r * 0.3, 190 * psc); mg.addColorStop(0, 'rgba(255,222,150,' + (0.08 + 0.12 * mi) + ')'); mg.addColorStop(1, 'rgba(255,200,120,0)'); ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(px, py - r * 0.3, 190 * psc, 0, 7); ctx.fill(); }
         if (happy && Math.floor(now / 700) % 4 === 0 && Math.random() < 0.3) sparkles.push({ x: px - 60 + Math.random() * 160, y: py - r * 0.7 + Math.random() * 80, vx: 0, vy: -0.4, life: 1, color: '#ffe9a8', size: 1.6 });
         ctx.fillStyle = 'rgba(13,8,21,.4)'; ctx.beginPath(); ctx.ellipse(px, py + r * 0.16 - iDy * 0.3, (r * 0.75) - iDy * 0.3, r * 0.16, 0, 0, 7); ctx.fill();
@@ -2273,9 +2296,9 @@ function renderDenRoom(now) {
     wanderTick(gradWander[gi], now, 2000 + gi * 900, gi === 0 ? GRAD_L_WP : GRAD_R_WP);
     var gp = denProject(gradWander[gi].d, gradWander[gi].l), dp = denPool[gi], soulG = gi === 0 ? denSouls.g0 : denSouls.g1;
     (function (gx, gy, gsc, dp, soul, idx) {
-      jobs.push({ depth: gradWander[idx].d, draw: function () {
+      jobs.push({ depth: gy, draw: function () {
         soul.tick(now);
-        var gr = 48 * gsc;
+        var gr = 40 * gsc;
         ctx.fillStyle = 'rgba(13,8,21,.4)'; ctx.beginPath(); ctx.ellipse(gx, gy + gr * 0.14, gr * 1.1, gr * 0.23, 0, 0, 7); ctx.fill();
         if (dp.legend) {
           var Lg = dp.legend;
@@ -2299,9 +2322,9 @@ function renderDenRoom(now) {
     if (rstage0 >= 2) wanderTick(rescueWander, now, 2600, RESCUE_WP); // shy stages stay put near their spot; confident ones wander
     var rp2 = denProject(rescueWander.d, rescueWander.l);
     (function (rx, ry, rsc) {
-      jobs.push({ depth: rescueWander.d, draw: function () {
+      jobs.push({ depth: ry, draw: function () {
         var rstage = rescueStage(featR.trust), s2 = denSouls.r0; s2.tick(now);
-        var rr = 70 * [0.6, 0.76, 0.9, 1][rstage] * rsc;
+        var rr = 54 * [0.6, 0.76, 0.9, 1][rstage] * rsc;
         ctx.fillStyle = '#57406e'; ctx.beginPath(); ctx.ellipse(rx, ry + rr * 0.12, rr * 1.12, rr * 0.24, 0, 0, 7); ctx.fill();
         if (rstage === 3) { var rgl = ctx.createRadialGradient(rx, ry - rr * 0.5, 10, rx, ry - rr * 0.5, 90 * rsc); rgl.addColorStop(0, 'rgba(255,222,150,.16)'); rgl.addColorStop(1, 'rgba(255,222,150,0)'); ctx.fillStyle = rgl; ctx.beginPath(); ctx.arc(rx, ry - rr * 0.5, 90 * rsc, 0, 7); ctx.fill(); }
         ctx.save(); ctx.globalAlpha = rstage < 3 ? (0.5 + rstage * 0.2) : 1;
