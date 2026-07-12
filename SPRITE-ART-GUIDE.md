@@ -4,6 +4,14 @@
 
 ---
 
+## ⚡ QUICK START — paste this into any AI image tool (Midjourney / ChatGPT image / etc.) right now
+
+> kawaii chibi corgi puppy head-and-shoulders portrait, front facing, perfectly centered, a round baby corgi with huge upright ears, marmalade orange coat (#f0a35e) with a cream blaze down the muzzle, big glossy hopeful eyes with bright catchlights, blushing rosy cheeks, tiny content smile, soft rounded shapes, warm flat vector illustration with subtle soft shading, gentle rim light from a warm lantern, cozy bedtime storybook style, plain transparent background, no text, no border, high quality mobile game character art
+
+Save the result as **`corgi1.png`** (256×256, transparent background) into `PAWRADE\sprites\`, run `build.ps1`, and open the game — Mochi will be that illustrated corgi, everything else stays the current (now-cuter) code-drawn art. If you love the style, generate the rest from the manifest below using the first image as the reference/style anchor. **Send the PNGs to me and I'll bake + tune them in.**
+
+---
+
 ## HOW IT WORKS (already built — you only make images)
 
 1. You generate PNG images (below) and drop them into **`PAWRADE\sprites\`**.

@@ -1,5 +1,7 @@
 # PAWRADE — project context (auto-loaded)
 
+**LIVE at https://huyvuu.github.io/pawrade/** (GitHub Pages · repo github.com/huyvuu/pawrade · deploy = `git push origin main`). The den is now a **furnishable ISOMETRIC room** (diamond tile floor + two angled walls; `ISO_*` consts + `isoTile`/`screenToTile`; `denProject` maps pets onto the iso floor; `furnishMode` via the "furnish" button places/moves 11 `ISO_FURN` pieces per-tile into `save.denFurn`, paying dreamlight). Pets got a cuteness pass (big glossy catchlit eyes). True WebGL/orbit 3D is OFF the table (breaks law #1) unless the owner ratifies. Cuteness beyond parametric = illustrated sprites the owner provides (see SPRITE-ART-GUIDE.md ⚡quick-start). Open next: iso Phase 3 (wall/floor decor + pets using furniture).
+
 **What this is:** a master-crafted daily **link-to-MERGE** puzzle — pets people love (corgi/shiba/frenchie/tabby/tux/void cat) that you link into hugs and MERGE up growth stages (puppy → dog → majestic floof), with a bank-or-bust "TUCK THEM IN" decision layer. Final-stage pets graduate off the board INTO your den.
 
 **Hierarchy (owner-ratified 2026-07-09 — do not invert):**
