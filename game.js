@@ -740,6 +740,7 @@ function onDown(e) {
     if (p.x >= MAP_BACK.x && p.x <= MAP_BACK.x + MAP_BACK.w && p.y >= MAP_BACK.y && p.y <= MAP_BACK.y + MAP_BACK.h) { audio(); uiTick(); goDen(); return; }
     mapDrag = { y0: p.y, s0: mapScroll, moved: 0, px: p.x, py: p.y }; return;
   }
+  if (crossingScene) return;   // the crossing plays out uninterrupted — it's hers
   if (rescueVerbMenu) {   // the coax menu owns taps: pick a gesture, or tap away to close
     var mv; for (mv = 0; mv < verbChipRects.length; mv++) { var vc = verbChipRects[mv]; if (p.x >= vc.x && p.x <= vc.x + vc.w && p.y >= vc.y && p.y <= vc.y + vc.h) { if (!vc.used) applyVerb(rescueVerbMenu.idx, vc.v); return; } }
     rescueVerbMenu = null; setUI(); return;
@@ -1000,10 +1001,10 @@ function setUI() {
   var inDen = (screenMode === 'den' && curRoom === 0);
   $('whisper').classList.toggle('den', inDen);         // whisper floats above the care chips in the den, above the tuck in play
   $('bar-icons').classList.toggle('hidden', !inDen);   // the compact secondary row lives only in the den
-  if (furnishMode || arrivalScene || rescueVerbMenu) {   // full-screen canvas moments take over — chrome hides
+  if (furnishMode || arrivalScene || rescueVerbMenu || crossingScene) {   // full-screen canvas moments take over — chrome hides
     ['btn-parade', 'btn-map', 'btn-tuck', 'btn-dreams', 'btn-wardrobe', 'btn-practice', 'btn-shop'].forEach(function (b) { $(b).classList.add('hidden'); });
     $('bar-icons').classList.add('hidden'); $('care').classList.add('hidden');
-    $('whisper').classList.toggle('hidden', !!furnishMode);   // arrival + coax narrate through the whisper — keep it
+    $('whisper').classList.toggle('hidden', !!furnishMode);   // arrival / coax / crossing narrate through the whisper — keep it
     return;
   }
   $('whisper').classList.remove('hidden');
@@ -1583,7 +1584,7 @@ function applyVerb(idx, verb) {
     var sl = ['a small thank-you, told in tail.', 'noted. appreciated. still a little shy.', 'not much yet — but not nothing.'];
     setWhisper(sl[Math.floor(Math.random() * sl.length)]);
   }
-  if (after >= 3 && before < 3 && !r.homeCelebrated) { r.homeCelebrated = true; persist(); setTimeout(function () { showGlowUp(idx); }, 900); }
+  if (after >= 3 && before < 3 && !r.homeCelebrated) { r.homeCelebrated = true; persist(); setTimeout(function () { startCrossing(idx); }, 700); }
 }
 function drawRescueMenu(now) {
   var r = save.rescues[rescueVerbMenu.idx]; if (!r) { rescueVerbMenu = null; return; }
@@ -1611,6 +1612,41 @@ function drawRescueMenu(now) {
   ctx.textAlign = 'center'; ctx.font = "500 15px Fredoka, sans-serif"; ctx.fillStyle = 'rgba(185,169,201,.7)';
   ctx.fillText('tap away to close', W / 2, y0 + 2 * ch + gap + 34);
   ctx.textAlign = 'left';
+}
+// ---- THE CROSSING: at full trust she walks the whole room to your pet, nose to nose. then the glow-up. ----
+var crossingScene = null, CRS_WALK0 = 700, CRS_WALK1 = 4300, CRS_TOUCH = 5300, CRS_END = 7200;
+function tileToDL(col, row) { var n = ISO_COLS - 1; return { d: ((col + row) / 2) / n, l: (col - row) / n }; }
+function pickFavoriteSpot() {   // she claims a place of her own — a soft one if you bought her one
+  var pref = ['bed', 'cushion', 'rug', 'hearth'], p, k;
+  for (p = 0; p < pref.length; p++) for (k in save.denFurn) if (save.denFurn[k] === pref[p]) { var q = k.split('_'); return tileToDL(+q[0], +q[1]); }
+  return { d: 0.42, l: -0.44 };
+}
+function startCrossing(idx) {
+  var r = save.rescues[idx]; if (!r || crossingScene) return;
+  crossingScene = {
+    idx: idx, t0: performance.now(), glowed: false, w1: false, w2: false,
+    fromD: rescueWander ? rescueWander.d : 0.31, fromL: rescueWander ? rescueWander.l : 0.44,
+    toD: (petWander ? petWander.d : 0.66) - 0.02, toL: (petWander ? petWander.l : 0) + 0.3
+  };
+  setUI();
+}
+function tickCrossing(now) {
+  var c = crossingScene, r = save.rescues[c.idx];
+  if (!r) { crossingScene = null; setUI(); return; }
+  var e = now - c.t0;
+  if (!c.w1 && e > 250) { c.w1 = true; setWhisper('she’s… standing up.'); }
+  if (!c.w2 && e > CRS_WALK1 - 250) {
+    c.w2 = true; setWhisper('she crossed the whole room — to ' + (save.pet ? save.pet.name : 'him') + '.');
+  }
+  if (e > CRS_TOUCH && !c.glowed) {   // nose to nose
+    c.glowed = true;
+    var sp = pickFavoriteSpot(); r.spotD = sp.d; r.spotL = sp.l; persist();
+    var mid = { x: (rescueScreenPos.x + petScreenPos.x) / 2, y: (rescueScreenPos.y + petScreenPos.y) / 2 };
+    burstHeartsAt(mid.x, mid.y, 18);
+    mallet(SCALE_HZ[0], 0, 0.13, 0.5); mallet(SCALE_HZ[4], 0.14, 0.14, 0.6); mallet(SCALE_HZ[7], 0.3, 0.15, 1.0);
+    setWhisper('nose to nose. she’s home — really home.');
+  }
+  if (e > CRS_END) { var gi = c.idx; crossingScene = null; setUI(); showGlowUp(gi); }
 }
 $('glowup-close').addEventListener('click', function () { uiTick(); hideOv('glowup-ov'); });
 $('glowup-copy').addEventListener('click', function () {
@@ -1698,7 +1734,7 @@ function leaveNow() {
 }
 function goDen() {
   screenMode = 'den'; curRoom = 0; phase = 'idle'; clearFx(); fadeFrom = performance.now(); setUI(); denWhisper();
-  if (pendingGlowRescue >= 0) { var gi = pendingGlowRescue; pendingGlowRescue = -1; setTimeout(function () { showGlowUp(gi); }, 900); }
+  if (pendingGlowRescue >= 0) { var gi = pendingGlowRescue; pendingGlowRescue = -1; setTimeout(function () { startCrossing(gi); }, 900); }
 }
 function denWhisper() {
   if (save.pet && petMood() < 52 && Math.random() < 0.6) { setWhisper(save.pet.name + ' perks right up the moment you walk in.'); return; }
@@ -2638,8 +2674,18 @@ function renderDenRoom(now) {
     curFeaturedRescue = featI;
     if (!rescueWander) rescueWander = wanderInit(0.29, 0.4);
     var rstage0 = rescueStage(featR.trust);
-    if (rstage0 >= 2) wanderTick(rescueWander, now, 2600, RESCUE_WP); // shy stages stay put near their spot; confident ones wander
-    var rp2 = denProject(rescueWander.d, rescueWander.l);
+    var crossing = !!(crossingScene && crossingScene.idx === featI), rp2;
+    if (crossing) {                                   // the walk across the room — she drives her own path
+      var ce = now - crossingScene.t0, ck = Math.max(0, Math.min(1, (ce - CRS_WALK0) / (CRS_WALK1 - CRS_WALK0)));
+      var cek = ck < 0.5 ? 2 * ck * ck : 1 - Math.pow(-2 * ck + 2, 2) / 2;
+      rescueWander.d = crossingScene.fromD + (crossingScene.toD - crossingScene.fromD) * cek;
+      rescueWander.l = crossingScene.fromL + (crossingScene.toL - crossingScene.fromL) * cek;
+    } else if (rstage0 >= 2) {                        // shy stages stay put; confident ones roam — near her own spot once she has one
+      var zone = RESCUE_WP;
+      if (featR.spotD != null) zone = [{ d: featR.spotD, l: featR.spotL }, { d: featR.spotD + 0.03, l: featR.spotL + 0.06 }, { d: featR.spotD - 0.03, l: featR.spotL - 0.06 }, { d: featR.spotD, l: featR.spotL + 0.04 }];
+      wanderTick(rescueWander, now, 2600, zone);
+    }
+    rp2 = denProject(rescueWander.d, rescueWander.l);
     (function (rx, ry, rsc) {
       jobs.push({ depth: ry, draw: function () {
         var rstage = rescueStage(featR.trust), s2 = denSouls.r0; s2.tick(now);
@@ -2705,6 +2751,7 @@ function renderDenRoom(now) {
   if (line3.length) { ctx.font = "500 17px Fredoka, sans-serif"; ctx.fillText(line3.join(' · ') + homeSuffix, 26, 110); }
   if (furnishMode) drawFurnishUI(now);   // catalog strip + held piece + done/trash, drawn on top of everything
   if (arrivalScene) renderArrival(now);  // the arrival ceremony overlays the den (resident pet is home to greet)
+  if (crossingScene) tickCrossing(now);  // the walk-across payoff at full trust
   if (rescueVerbMenu) drawRescueMenu(now); // the coax verb picker
 }
 function renderPlay(now) {
@@ -2968,6 +3015,8 @@ window._pw = function () {
   return { combo: combo, comboBest: comboBest, score: score, botPar: botPar, parCrossed: parCrossed, mergeCount: mergeCount, board: o, rareCoat: curRareCoat, mask: curMask, blocked: blk, petScreenPos: petScreenPos, rescueScreenPos: rescueScreenPos, arrival: !!arrivalScene, doorAjar: denDoorAjar };
 };
 window._arrival = function (i) { if (screenMode !== 'den') goDen(); startArrival(RESCUE_POOL[i || 0]); };   // dev hook: play the arrival ceremony on demand
+window._cross = function (i) { if (screenMode !== 'den') goDen(); startCrossing(i || 0); };                // dev hook: play the crossing on demand
+window._rescueState = function (i) { var r = save.rescues[i || 0]; return r ? { trust: r.trust, spotD: r.spotD, spotL: r.spotL, vused: r.vused, crossing: !!crossingScene, pos: rescueScreenPos } : null; };
 demoCv = $('demo-cv'); dctx = demoCv.getContext('2d');
 dreamsCv = $('dreams-cv'); drctx = dreamsCv.getContext('2d');
 wardrobeCv = $('wardrobe-cv'); wardrobeCtx = wardrobeCv.getContext('2d');
