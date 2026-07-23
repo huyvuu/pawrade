@@ -1014,6 +1014,10 @@ function onDown(e) {
     if (p.x >= MAP_BACK.x && p.x <= MAP_BACK.x + MAP_BACK.w && p.y >= MAP_BACK.y && p.y <= MAP_BACK.y + MAP_BACK.h) { audio(); uiTick(); goDen(); return; }
     mapDrag = { y0: p.y, s0: mapScroll, moved: 0, px: p.x, py: p.y }; return;
   }
+  if (rescueVerbMenu) {   // the coax menu owns taps: pick a gesture, or tap away to close
+    var mv; for (mv = 0; mv < verbChipRects.length; mv++) { var vc = verbChipRects[mv]; if (p.x >= vc.x && p.x <= vc.x + vc.w && p.y >= vc.y && p.y <= vc.y + vc.h) { if (!vc.used) applyVerb(rescueVerbMenu.idx, vc.v); return; } }
+    rescueVerbMenu = null; setUI(); return;
+  }
   if (arrivalScene) {   // tap anywhere skips the ceremony straight to the "leave the door open?" prompt
     if (!arrivalScene.prompted) { arrivalScene.t0 = performance.now() - ARR_HIDE; }
     return;
@@ -1045,7 +1049,7 @@ function onDown(e) {
     if (curRoom < ROOMS.length - 1 && p.x >= NAV_R.x && p.x <= NAV_R.x + NAV_R.w && p.y >= NAV_R.y && p.y <= NAV_R.y + NAV_R.h) { audio(); uiTick(); curRoom++; fadeFrom = performance.now(); setUI(); return; }
     if (curRoom === 0) {
       if (save.pet && Math.hypot(p.x - petScreenPos.x, p.y - petScreenPos.y) < petScreenPos.r * 1.25) { audio(); petReact('pat'); return; }
-      if (curFeaturedRescue >= 0 && Math.hypot(p.x - rescueScreenPos.x, p.y - rescueScreenPos.y) < rescueScreenPos.r * 1.25) { coaxRescue(curFeaturedRescue); return; }
+      if (curFeaturedRescue >= 0 && Math.hypot(p.x - rescueScreenPos.x, p.y - rescueScreenPos.y) < rescueScreenPos.r * 1.25) { openRescueMenu(curFeaturedRescue); return; }
       return;
     }
     var room = ROOMS[curRoom];
@@ -1270,10 +1274,10 @@ function setUI() {
   var inDen = (screenMode === 'den' && curRoom === 0);
   $('whisper').classList.toggle('den', inDen);         // whisper floats above the care chips in the den, above the tuck in play
   $('bar-icons').classList.toggle('hidden', !inDen);   // the compact secondary row lives only in the den
-  if (furnishMode || arrivalScene) {   // furnish mode / the arrival ceremony take over \u2014 chrome hides, canvas carries it
+  if (furnishMode || arrivalScene || rescueVerbMenu) {   // full-screen canvas moments take over \u2014 chrome hides
     ['btn-parade', 'btn-map', 'btn-tuck', 'btn-dreams', 'btn-wardrobe', 'btn-practice', 'btn-shop'].forEach(function (b) { $(b).classList.add('hidden'); });
     $('bar-icons').classList.add('hidden'); $('care').classList.add('hidden');
-    $('whisper').classList.toggle('hidden', !!furnishMode);   // the arrival narrates through the whisper \u2014 keep it
+    $('whisper').classList.toggle('hidden', !!furnishMode);   // arrival + coax narrate through the whisper \u2014 keep it
     return;
   }
   $('whisper').classList.remove('hidden');
@@ -1807,6 +1811,80 @@ function coaxRescue(idx) {
 }
 function rescueShareText(r) {
   return r.name + ': found scared, ' + (r.trait ? 'now ' + traitLine(r.trait) : 'now home for good. \ud83d\udc9b') + '\npawrade.pages.dev';
+}
+// ---- THE COAX RITUAL: four gentle gestures, one each per day, one is her secret favorite ----
+var RESCUE_VERBS = ['sit', 'treat', 'words', 'toy'];
+var RESCUE_VERB_LABEL = { sit: 'sit near', treat: 'a treat', words: 'soft words', toy: 'roll a toy' };
+var RESCUE_FAV = { tux: 'words', tabby: 'toy', voidcat: 'sit', corgi: 'treat', shiba: 'toy', frenchie: 'treat' };
+function rescueFavVerb(r) { return r.trait === 'cart' ? 'toy' : r.trait === 'patch' ? 'words' : (RESCUE_FAV[r.breed] || 'treat'); }
+var rescueVerbMenu = null, verbChipRects = [];
+function drawTinyHeart(x, y, s) { ctx.beginPath(); ctx.moveTo(x, y + s * 0.3); ctx.bezierCurveTo(x - s, y - s * 0.7, x - s * 1.5, y + s * 0.45, x, y + s * 1.25); ctx.bezierCurveTo(x + s * 1.5, y + s * 0.45, x + s, y - s * 0.7, x, y + s * 0.3); ctx.closePath(); ctx.fill(); }
+function drawVerbIcon(v, x, y, s) {
+  ctx.save(); ctx.translate(x, y);
+  if (v === 'sit') { ctx.fillStyle = '#7290b2'; ctx.beginPath(); ctx.ellipse(0, s * 0.3, s * 0.72, s * 0.34, 0, 0, 7); ctx.fill(); ctx.fillStyle = '#96b0d0'; ctx.beginPath(); ctx.ellipse(0, s * 0.15, s * 0.58, s * 0.26, 0, 0, 7); ctx.fill(); }
+  else if (v === 'treat') { ctx.fillStyle = '#e0a060'; ctx.save(); ctx.rotate(0.5); ctx.beginPath(); ctx.ellipse(0, 0, s * 0.62, s * 0.24, 0, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(-s * 0.55, -s * 0.2, s * 0.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(-s * 0.55, s * 0.2, s * 0.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.2, s * 0.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(s * 0.55, s * 0.2, s * 0.2, 0, 7); ctx.fill(); ctx.restore(); }
+  else if (v === 'words') { ctx.fillStyle = '#e8b4c8'; roundRect(-s * 0.7, -s * 0.55, s * 1.4, s * 0.9, 6); ctx.fill(); ctx.beginPath(); ctx.moveTo(-s * 0.25, s * 0.3); ctx.lineTo(-s * 0.05, s * 0.66); ctx.lineTo(s * 0.15, s * 0.3); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#33244e'; for (var d = -1; d <= 1; d++) { ctx.beginPath(); ctx.arc(d * s * 0.34, -s * 0.1, s * 0.09, 0, 7); ctx.fill(); } }
+  else { ctx.fillStyle = '#7fb8e8'; ctx.beginPath(); ctx.arc(0, 0, s * 0.56, 0, 7); ctx.fill(); ctx.strokeStyle = '#5a94c4'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, s * 0.38, 0.4, 2.6); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, s * 0.38, 3.5, 5.8); ctx.stroke(); }
+  ctx.restore();
+}
+function openRescueMenu(idx) {
+  var r = save.rescues[idx]; if (!r) return; audio();
+  if (r.vday !== dayNumber()) { r.vday = dayNumber(); r.vused = {}; persist(); }
+  var allUsed = true, vi; for (vi = 0; vi < 4; vi++) if (!(r.vused && r.vused[RESCUE_VERBS[vi]])) allUsed = false;
+  if (allUsed) { setWhisper('she\u2019s had her fill of kindness today. tomorrow?'); return; }
+  rescueVerbMenu = { idx: idx }; setUI();
+}
+function applyVerb(idx, verb) {
+  var r = save.rescues[idx]; if (!r) return;
+  if (r.vday !== dayNumber()) { r.vday = dayNumber(); r.vused = {}; }
+  if (r.vused && r.vused[verb]) return;
+  audio(); r.vused = r.vused || {}; r.vused[verb] = true;
+  var fav = rescueFavVerb(r) === verb, before = rescueStage(r.trust);
+  r.trust = Math.min(100, r.trust + (fav ? 12 : 4));
+  var after = rescueStage(r.trust);
+  r._pop = performance.now();
+  rescueVerbMenu = null; persist(); setUI();
+  var rp = rescueScreenPos;
+  if (fav) { burstHeartsAt(rp.x, rp.y - 20, 11); mallet(SCALE_HZ[4], 0, 0.12, 0.3); mallet(SCALE_HZ[7], 0.13, 0.13, 0.5); }
+  else { burstHeartsAt(rp.x, rp.y - 20, 4); mallet(SCALE_HZ[2], 0, 0.08, 0.22); }
+  if (after > before) {
+    var cross = ['', 'she stops hiding now \u2014 just watches you.', 'she took a step closer. toward you.', ''][after];
+    setWhisper(cross || 'braver, a little, every day.'); burstHeartsAt(rp.x, rp.y - 20, 12);
+  } else if (fav) {
+    var fl = { sit: r.name + ' settles beside you. that\u2019s new.', treat: r.name + ' sniffs \u2014 then, quietly, nibbles.', words: 'an ear turns toward your voice and stays.', toy: r.name + ' bats the toy once. just once. but still.' };
+    setWhisper(fl[verb]);
+  } else {
+    var sl = ['a small thank-you, told in tail.', 'noted. appreciated. still a little shy.', 'not much yet \u2014 but not nothing.'];
+    setWhisper(sl[Math.floor(Math.random() * sl.length)]);
+  }
+  if (after >= 3 && before < 3 && !r.homeCelebrated) { r.homeCelebrated = true; persist(); setTimeout(function () { showGlowUp(idx); }, 900); }
+}
+function drawRescueMenu(now) {
+  var r = save.rescues[rescueVerbMenu.idx]; if (!r) { rescueVerbMenu = null; return; }
+  verbChipRects = [];
+  ctx.fillStyle = 'rgba(13,8,21,.74)'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.font = "700 24px 'Baloo 2', sans-serif"; ctx.fillStyle = '#ffd9a0';
+  ctx.fillText('how will you reach ' + r.name + '?', W / 2, 316);
+  ctx.font = "500 16px Fredoka, sans-serif"; ctx.fillStyle = '#b9a9c9';
+  ctx.fillText('one gesture a day \u2014 she remembers which', W / 2, 346);
+  var cw = 202, ch = 90, gap = 16, x0 = W / 2 - cw - gap / 2, y0 = 392;
+  for (var i = 0; i < 4; i++) {
+    var v = RESCUE_VERBS[i], used = !!(r.vused && r.vused[v]);
+    var cx = x0 + (i % 2) * (cw + gap), cy = y0 + Math.floor(i / 2) * (ch + gap);
+    ctx.fillStyle = used ? 'rgba(42,29,61,.5)' : 'rgba(42,29,61,.96)'; roundRect(cx, cy, cw, ch, 16); ctx.fill();
+    ctx.strokeStyle = used ? '#3a2f4a' : '#574371'; ctx.lineWidth = 1.5; roundRect(cx, cy, cw, ch, 16); ctx.stroke();
+    ctx.save(); ctx.globalAlpha = used ? 0.4 : 1;
+    drawVerbIcon(v, cx + 42, cy + ch / 2 - (used ? 8 : 0), 24);
+    ctx.textAlign = 'left'; ctx.font = "700 19px 'Baloo 2', sans-serif"; ctx.fillStyle = '#f6efe6';
+    ctx.fillText(RESCUE_VERB_LABEL[v], cx + 74, cy + ch / 2 + (used ? -2 : 6));
+    if (used) { ctx.font = "500 12px Fredoka, sans-serif"; ctx.fillStyle = '#8fd0a4'; ctx.fillText('given today \u2713', cx + 74, cy + ch / 2 + 18); }
+    ctx.restore();
+    verbChipRects.push({ x: cx, y: cy, w: cw, h: ch, v: v, used: used });
+  }
+  ctx.textAlign = 'center'; ctx.font = "500 15px Fredoka, sans-serif"; ctx.fillStyle = 'rgba(185,169,201,.7)';
+  ctx.fillText('tap away to close', W / 2, y0 + 2 * ch + gap + 34);
+  ctx.textAlign = 'left';
 }
 $('glowup-close').addEventListener('click', function () { uiTick(); hideOv('glowup-ov'); });
 $('glowup-copy').addEventListener('click', function () {
@@ -2843,13 +2921,24 @@ function renderDenRoom(now) {
         ctx.fillStyle = '#57406e'; ctx.beginPath(); ctx.ellipse(rx, ry + rr * 0.12, rr * 1.12, rr * 0.24, 0, 0, 7); ctx.fill();
         if (rstage === 3) { var rgl = ctx.createRadialGradient(rx, ry - rr * 0.5, 10, rx, ry - rr * 0.5, 90 * rsc); rgl.addColorStop(0, 'rgba(255,222,150,.16)'); rgl.addColorStop(1, 'rgba(255,222,150,0)'); ctx.fillStyle = rgl; ctx.beginPath(); ctx.arc(rx, ry - rr * 0.5, 90 * rsc, 0, 7); ctx.fill(); }
         ctx.save(); ctx.globalAlpha = rstage < 3 ? (0.5 + rstage * 0.2) : 1;
-        drawPet(ctx, featR.breed, featR.coat, rx, ry - rr * 0.5, rr, { breath: s2.breath(now), sleeping: rstage === 0, sad: rstage === 1, pupil: rstage <= 1 ? { x: 0.55, y: 0.15 } : { x: 0, y: 0 } });
-        drawTraitMark(ctx, featR.trait, rx, ry - rr * 0.5, rr, rstage < 3);
+        var pcy = ry - rr * 0.5;
+        if (featR._pop && now - featR._pop < 500) { var pp = (now - featR._pop) / 500, ps = 1 + 0.17 * Math.sin(pp * Math.PI); ctx.translate(rx, pcy); ctx.scale(ps, ps); ctx.translate(-rx, -pcy); }
+        drawPet(ctx, featR.breed, featR.coat, rx, pcy, rr, { breath: s2.breath(now), sleeping: rstage === 0, sad: rstage === 1, pupil: rstage <= 1 ? { x: 0.55, y: 0.15 } : { x: 0, y: 0 } });
+        drawTraitMark(ctx, featR.trait, rx, pcy, rr, rstage < 3);
         if (rstage === 0) { ctx.fillStyle = '#3a2c22'; ctx.fillRect(rx - rr * 0.63, ry - rr * 0.15, rr * 1.26, rr * 0.57); ctx.fillStyle = '#4a3a30'; ctx.fillRect(rx - rr * 0.63, ry - rr * 0.15, rr * 1.26, rr * 0.09); }
         ctx.restore();
-        ctx.font = "600 " + Math.round(17 * Math.max(rsc, 0.85)) + "px 'Baloo 2', sans-serif"; ctx.fillStyle = '#b9a9c9'; ctx.textAlign = 'center';
-        ctx.fillText(featR.name + ' \u2014 ' + RESCUE_STAGE_WORD[rstage], rx, ry - rr * 1.02 + rr * 0.9);
-        rescueScreenPos = { x: rx, y: ry - rr * 0.5, r: rr };
+        var topY = ry - rr * 1.85;                                   // above her ears
+        ctx.font = "600 15px 'Baloo 2', sans-serif"; ctx.fillStyle = '#c9b8d8'; ctx.textAlign = 'center';
+        ctx.fillText(featR.name + ' \u00b7 ' + RESCUE_STAGE_WORD[rstage], rx, topY - 8);
+        if (rstage < 3) {                                            // the visible trust meter, filling in warm
+          var barW = 64, barH = 8, barX = rx - barW / 2;
+          ctx.fillStyle = 'rgba(30,20,44,.85)'; roundRect(barX, topY, barW, barH, 4); ctx.fill();
+          var fw = barW * (featR.trust / 100);
+          if (fw > 0) { ctx.fillStyle = '#e8879e'; roundRect(barX, topY, Math.max(barH, fw), barH, 4); ctx.fill(); }
+          ctx.strokeStyle = 'rgba(255,185,200,.3)'; ctx.lineWidth = 1; roundRect(barX, topY, barW, barH, 4); ctx.stroke();
+          ctx.fillStyle = '#ffb9c8'; drawTinyHeart(barX + barW + 8, topY + barH / 2, 4.6);
+        }
+        rescueScreenPos = { x: rx, y: pcy, r: rr };
       } });
     })(rp2.x, rp2.y, rp2.scale);
   } else { curFeaturedRescue = -1; }
@@ -2890,6 +2979,7 @@ function renderDenRoom(now) {
   if (line3.length) { ctx.font = "500 17px Fredoka, sans-serif"; ctx.fillText(line3.join(' \u00b7 ') + homeSuffix, 26, 110); }
   if (furnishMode) drawFurnishUI(now);   // catalog strip + held piece + done/trash, drawn on top of everything
   if (arrivalScene) renderArrival(now);  // the arrival ceremony overlays the den (resident pet is home to greet)
+  if (rescueVerbMenu) drawRescueMenu(now); // the coax verb picker
 }
 function renderPlay(now) {
   ctx.save();
