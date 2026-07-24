@@ -650,7 +650,26 @@ var grid = [], deck = [], deckPos = 0, yawnRng = null;
 var score = 0, longestHug = 0, mergeCount = 0, grownTonight = 0, gradsTonight = [], runMode = 'daily';
 var curYawnEvery = 3, curYawnTargets = 2, curNight = 0, curObjective = null, wokenTotal = 0;
 var curMask = [];   // this run's fixed obstacle shape \u2014 same every attempt, part of the level's "architecture"
-function isBlockedCell(x, y) { return isMaskedCell(curMask, x, y); }
+// ---- TYPED TILES: the complexity staircase. cozy house obstacles that mostly create CHOICES, not walls. ----
+// quilt(n): passable, folded away by a merge touching it \u00b7 yarn(n): blocks until unravelled by an adjacent merge
+// moon: passable, a merge ENDING here scores double \u00b7 draft: passable, a pet landing here dozes off
+// spawn(b): a toybox that occupies its cell and keeps spilling its breed into the room
+var curTiles = {};
+function tkey(x, y) { return x + ',' + y; }
+function tilesFromSpec(spec) { var m = {}, a = (spec && spec.tiles) || [], i; for (i = 0; i < a.length; i++) m[tkey(a[i].x, a[i].y)] = { t: a[i].t, n: a[i].n, b: a[i].b }; return m; }
+function tileBlocks(tm, x, y) { var t = tm[tkey(x, y)]; return !!(t && (t.t === 'yarn' || t.t === 'spawn') && (t.n === undefined || t.n > 0)); }
+var FOLD_D = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
+function foldTiles(tm, cells) {   // a hug tidies the quilt / unravels the yarn it touches (and its orthogonal neighbours)
+  var i, d, k, folded = 0, hit = {};
+  for (i = 0; i < cells.length; i++) for (d = 0; d < 5; d++) hit[tkey(cells[i][0] + FOLD_D[d][0], cells[i][1] + FOLD_D[d][1])] = 1;
+  for (k in hit) {   // ONE layer per hug, however many of its cells touched the tile
+    var t = tm[k];
+    if (t && (t.t === 'quilt' || t.t === 'yarn')) { t.n = (t.n || 1) - 1; folded++; if (t.n <= 0) delete tm[k]; }
+  }
+  return folded;
+}
+function tilesLeft(tm, type) { var c = 0, k; for (k in tm) if (tm[k].t === type) c++; return c; }
+function isBlockedCell(x, y) { return isMaskedCell(curMask, x, y) || tileBlocks(curTiles, x, y); }
 var mapScroll = 0, mapDrag = null;   // Neighborhood map scroll state
 var slotPreview = [];                // home slot-chooser preview canvases (populated at boot, before V6 defs)
 var wardrobeOpen = false, wardrobeCv, wardrobeCtx;   // V7 dressing room (declared up top \u2014 boot-order safety)
@@ -837,11 +856,13 @@ function computeBotPar(seedStr, spec) {
     else bdeck.push({ b: bs[Math.floor(rng() * bs.length)], s: 1 });
   }
   var mask = spec.mask || [];
+  var btiles = tilesFromSpec(spec);                                   // the bot faces the same quilts/yarn/moonbeams/drafts
+  function bBlocked(x, y) { return isMaskedCell(mask, x, y) || tileBlocks(btiles, x, y); }
   var g = [], sleep = [];
-  for (var y = 0; y < ROWS; y++) { g.push([]); sleep.push([]); for (var x = 0; x < COLS; x++) { var blk = isMaskedCell(mask, x, y); g[y].push(blk ? null : (bp < bdeck.length ? bdeck[bp++] : null)); sleep[y].push(false); } }
+  for (var y = 0; y < ROWS; y++) { g.push([]); sleep.push([]); for (var x = 0; x < COLS; x++) { var blk = bBlocked(x, y); g[y].push(blk ? null : (bp < bdeck.length ? bdeck[bp++] : null)); sleep[y].push(false); } }
   if (spec.presetSleep) { // same fixed opening shape the real board uses, so the bot faces the identical architecture
     var archRng2 = mulberry32(hashStr('ARCH-' + seedStr.split('-').slice(0, 2).join('-')));
-    var openCells2 = []; for (var ay2 = 0; ay2 < ROWS; ay2++) for (var ax2 = 0; ax2 < COLS; ax2++) if (!isMaskedCell(mask, ax2, ay2)) openCells2.push([ax2, ay2]);
+    var openCells2 = []; for (var ay2 = 0; ay2 < ROWS; ay2++) for (var ax2 = 0; ax2 < COLS; ax2++) if (!bBlocked(ax2, ay2)) openCells2.push([ax2, ay2]);
     for (var pc2 = 0; pc2 < Math.min(spec.presetSleep, openCells2.length); pc2++) { var idx2 = Math.floor(archRng2() * openCells2.length), cp2 = openCells2.splice(idx2, 1)[0]; sleep[cp2[1]][cp2[0]] = true; }
   }
   function groupAt(sx, sy, seen) {
@@ -869,12 +890,15 @@ function computeBotPar(seedStr, spec) {
     }
     if (!best) break;
     var cells = best.cells.slice(0, 5), n = cells.length, kind = best.kind;
-    if (kind.s >= 3) { for (var ci = 0; ci < n; ci++) g[cells[ci][1]][cells[ci][0]] = null; }
+    if (kind.s >= 3) { for (var ci = 0; ci < n; ci++) g[cells[ci][1]][cells[ci][0]] = null; foldTiles(btiles, cells); }
     else {
-      score += 12 * n * n * STAGE_MULT[kind.s];
-      var end = cells[n - 1];
+      var end = cells[n - 1], bmt = btiles[tkey(end[0], end[1])];
+      var bGain = 12 * n * n * STAGE_MULT[kind.s];
+      if (bmt && bmt.t === 'moon') bGain *= 2;          // the bot can use the moonlight too
+      score += bGain;
       for (var cj = 0; cj < n; cj++) g[cells[cj][1]][cells[cj][0]] = null;
       g[end[1]][end[0]] = { b: kind.b, s: kind.s + 1 };
+      foldTiles(btiles, cells);
       merges++;
       if (merges >= 12) break;   // the bot gets sleepy too \u2014 par stays HUMAN-scale (a person plays 10-20 hugs, not the whole deck)
     }
@@ -882,10 +906,21 @@ function computeBotPar(seedStr, spec) {
     for (var gx = 0; gx < COLS; gx++) {
       var wy = ROWS - 1;
       for (var gy = ROWS - 1; gy >= 0; gy--) {
-        if (isMaskedCell(mask, gx, gy)) { for (var fy2 = wy; fy2 > gy; fy2--) { g[fy2][gx] = bp < bdeck.length ? bdeck[bp++] : null; sleep[fy2][gx] = false; } wy = gy - 1; continue; }
+        if (bBlocked(gx, gy)) { for (var fy2 = wy; fy2 > gy; fy2--) { g[fy2][gx] = bp < bdeck.length ? bdeck[bp++] : null; sleep[fy2][gx] = false; } wy = gy - 1; continue; }
         if (g[gy][gx]) { if (wy !== gy) { g[wy][gx] = g[gy][gx]; sleep[wy][gx] = sleep[gy][gx]; g[gy][gx] = null; sleep[gy][gx] = false; } wy--; }
       }
       for (; wy >= 0; wy--) { g[wy][gx] = bp < bdeck.length ? bdeck[bp++] : null; sleep[wy][gx] = false; }
+    }
+    for (var tk in btiles) {                        // drafts doze whoever settled in them; toyboxes spill (same fixed order as the board)
+      var bt = btiles[tk], tp = tk.split(','), tx = +tp[0], ty = +tp[1];
+      if (bt.t === 'draft') { if (g[ty] && g[ty][tx]) sleep[ty][tx] = true; }
+      else if (bt.t === 'spawn' && bt.b) {
+        for (var sd = 1; sd < FOLD_D.length; sd++) {
+          var ux = tx + FOLD_D[sd][0], uy = ty + FOLD_D[sd][1];
+          if (ux < 0 || ux >= COLS || uy < 0 || uy >= ROWS) continue;
+          if (g[uy][ux] && !sleep[uy][ux] && g[uy][ux].s === 1 && g[uy][ux].b !== bt.b && g[uy][ux].b !== 'voidcat') { g[uy][ux] = { b: bt.b, s: 1 }; break; }
+        }
+      }
     }
     if (merges % YE === 0) { // yawn
       var awake = [];
@@ -923,6 +958,7 @@ function startRun(mode, id) {
   curRareCoat = spec.rareCoat || 0; starHits = 0;
   curYawnEvery = spec.yawnEvery; curYawnTargets = spec.yawnTargets;
   curMask = spec.mask || [];
+  curTiles = tilesFromSpec(spec);
   buildDeck(mulberry32(hashStr(seedStr)), spec);
   yawnRng = mulberry32(hashStr(seedStr + '-yawn'));
   starRng = mulberry32(hashStr(seedStr + '-star'));
@@ -1125,6 +1161,8 @@ function resolveMerge() {
     save.graduates[kind.breed] = (save.graduates[kind.breed] || 0) + 1;
     gradsTonight.push(kind.breed);
     persist();
+    var gCells = []; for (var gk = 0; gk < n; gk++) gCells.push([path[gk].x, path[gk].y]);
+    foldTiles(curTiles, gCells);   // a graduation tidies what it walks past too
     callout(STAGE_NAME[kind.breed][3] + ' IS COMPLETE.', '#ffd9a0');
     setWhisper(WHISPERS.graduated[0].replace('{X}', STAGE_NAME[kind.breed][3]));
     wakeAround(endPos, 2); // the parade noise wakes half the room
@@ -1136,6 +1174,10 @@ function resolveMerge() {
     for (var si = 0; si < n; si++) if (star && path[si].x === star.x && path[si].y === star.y) starHit = true;
     if (mergeCount === 0) { gained *= 2; callout('first hug of the night \u00d72', '#ffd9a0'); }
     if (starHit) { gained *= 2; star = null; starHits++; if (starHits >= 3) unlockLegend('starlight'); }
+    var moonT = curTiles[tkey(endPos.x, endPos.y)];      // a hug finished in the moonlight is worth double
+    if (moonT && moonT.t === 'moon') { gained *= 2; callout('in the moonlight \u00d72', '#a8d8ff'); }
+    var pathCells = []; for (var pcI = 0; pcI < n; pcI++) pathCells.push([path[pcI].x, path[pcI].y]);
+    if (foldTiles(curTiles, pathCells)) noisePuff(0, 0.07, 520);   // quilts fold, yarn unravels \u2014 a soft rustle
     var ex = GRID_X + endPos.x * CELL + CELL / 2, ey = GRID_Y + endPos.y * CELL + CELL / 2;
     // capture + null sources; launch them flying INTO the end cell. the shimmer carries: any rare in the chain \u2192 rare result
     var theCoat = 0;
@@ -1229,6 +1271,69 @@ function queueYawn() {
     })(t, i);
   }
 }
+// ---- tile art: cozy house obstacles, drawn in the room's own language ----
+function drawQuiltTile(cx, cy, n) {
+  ctx.save();
+  ctx.fillStyle = n > 1 ? 'rgba(152,112,172,.5)' : 'rgba(192,152,202,.36)';
+  roundRect(cx - CELL / 2 + 5, cy - CELL / 2 + 5, CELL - 10, CELL - 10, 14); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,220,240,.32)'; ctx.lineWidth = 1.5;
+  if (ctx.setLineDash) ctx.setLineDash([5, 4]);
+  roundRect(cx - CELL / 2 + 11, cy - CELL / 2 + 11, CELL - 22, CELL - 22, 10); ctx.stroke();
+  if (ctx.setLineDash) ctx.setLineDash([]);
+  ctx.restore();
+}
+function drawMoonTile(cx, cy, now) {
+  var pulse = 0.15 + 0.09 * Math.sin(now / 700);
+  var mg = ctx.createRadialGradient(cx, cy, 4, cx, cy, CELL * 0.62);
+  mg.addColorStop(0, 'rgba(168,216,255,' + (pulse + 0.16) + ')'); mg.addColorStop(1, 'rgba(168,216,255,0)');
+  ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(cx, cy, CELL * 0.62, 0, 7); ctx.fill();
+}
+function drawDraftTile(cx, cy, now) {
+  ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = '#7fb8e8'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  for (var i = 0; i < 3; i++) {
+    var yy = cy - 13 + i * 13, ph = Math.sin(now / 520 + i) * 6;
+    ctx.beginPath(); ctx.moveTo(cx - 16 + ph, yy); ctx.quadraticCurveTo(cx + ph, yy - 5, cx + 16 + ph, yy); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawYarnTile(cx, cy, n) {
+  ctx.fillStyle = 'rgba(40,28,58,.5)'; roundRect(cx - CELL / 2 + 6, cy - CELL / 2 + 6, CELL - 12, CELL - 12, 16); ctx.fill();
+  ctx.fillStyle = n > 1 ? '#b8607e' : '#e0899f'; ctx.beginPath(); ctx.arc(cx, cy, CELL * 0.25, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 2;
+  for (var a = 0; a < 3; a++) { ctx.beginPath(); ctx.arc(cx, cy, CELL * 0.25 - 3, a * 2.1, a * 2.1 + 1.6); ctx.stroke(); }
+  if (n > 1) { ctx.fillStyle = '#f6efe6'; ctx.font = "700 12px 'Baloo 2', sans-serif"; ctx.textAlign = 'center'; ctx.fillText(n, cx, cy + CELL * 0.44); ctx.textAlign = 'left'; }
+}
+function drawToyboxTile(cx, cy) {
+  ctx.fillStyle = '#5f8fc0'; roundRect(cx - CELL / 2 + 9, cy - CELL / 2 + 16, CELL - 18, CELL - 26, 9); ctx.fill();
+  ctx.fillStyle = '#77a8d8'; roundRect(cx - CELL / 2 + 7, cy - CELL / 2 + 9, CELL - 14, 12, 6); ctx.fill();
+  ctx.fillStyle = '#ffca7a'; ctx.beginPath(); ctx.arc(cx - 8, cy - CELL * 0.28, 6, 0, 7); ctx.fill();
+  ctx.fillStyle = '#e8879e'; ctx.beginPath(); ctx.arc(cx + 8, cy - CELL * 0.24, 5, 0, 7); ctx.fill();
+}
+// the cold draft dozes whoever settles in it; the toybox keeps spilling its own kind into the room
+function applyTileEffects() {
+  var k, t, x, y;
+  for (k in curTiles) {
+    t = curTiles[k];
+    if (t.t === 'draft') {
+      var p = k.split(','); x = +p[0]; y = +p[1];
+      var c = grid[y] && grid[y][x];
+      if (c && c.pet && !c.asleep) { c.asleep = true; }
+    }
+  }
+  for (k in curTiles) {
+    t = curTiles[k];
+    if (t.t === 'spawn' && t.b) {
+      var q = k.split(','), sx = +q[0], sy = +q[1], near = [], d;
+      for (d = 1; d < FOLD_D.length; d++) {   // skip [0,0] \u2014 the toybox spills into the room, not onto itself
+        var nx = sx + FOLD_D[d][0], ny = sy + FOLD_D[d][1];
+        if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
+        var nc = grid[ny][nx];
+        if (nc && nc.pet && !nc.asleep && nc.pet.stage === 1 && nc.pet.breed !== t.b && nc.pet.breed !== 'voidcat') near.push(nc);
+      }
+      if (near.length) { var pick = near[0]; pick.pet = { breed: t.b, stage: 1, coat: pick.pet.coat || 0 }; }   // fixed scan order \u2014 the daily must stay identical worldwide (law #2)
+    }
+  }
+}
 function settleAndRefill() {
   // gravity runs in SEGMENTS between blocked cells \u2014 obstacles are fixed walls, never moved, never occupied
   for (var x = 0; x < COLS; x++) {
@@ -1252,6 +1357,7 @@ function settleAndRefill() {
       if (np) { grid[wy][x].soul = newSoul(x, wy); grid[wy][x].drop = -(wy + 1.5) * CELL; grid[wy][x].vy = 0; }
     }
   }
+  applyTileEffects();
   phase = 'idle';
   // wishing star lifecycle: it drifts, lasts 3 moves, then leaves
   if (star) { starMoves--; if (starMoves <= 0) star = null; }
@@ -3108,12 +3214,20 @@ function renderPlay(now) {
   for (var y = 0; y < ROWS; y++) for (var x = 0; x < COLS; x++) {
     var cell = grid[y][x];
     var cx = GRID_X + x * CELL + CELL / 2, cy = GRID_Y + y * CELL + CELL / 2;
-    if (cell.blocked) { // the level's fixed architecture \u2014 reads as room decor, not an empty gap
+    if (isMaskedCell(curMask, x, y)) { // the level's fixed architecture \u2014 reads as room decor, not an empty gap
       ctx.fillStyle = 'rgba(40,28,58,.5)'; roundRect(cx - CELL / 2 + 6, cy - CELL / 2 + 6, CELL - 12, CELL - 12, 16); ctx.fill();
       ctx.strokeStyle = 'rgba(90,74,120,.4)'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.strokeStyle = 'rgba(120,102,150,.55)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(cx - 12, cy - 12); ctx.lineTo(cx + 12, cy + 12); ctx.moveTo(cx + 12, cy - 12); ctx.lineTo(cx - 12, cy + 12); ctx.stroke();
       continue;
+    }
+    var tl = curTiles[tkey(x, y)];
+    if (tl) {
+      if (tl.t === 'yarn') { drawYarnTile(cx, cy, tl.n); continue; }
+      if (tl.t === 'spawn') { drawToyboxTile(cx, cy); continue; }
+      if (tl.t === 'quilt') drawQuiltTile(cx, cy, tl.n);
+      else if (tl.t === 'moon') drawMoonTile(cx, cy, now);
+      else if (tl.t === 'draft') drawDraftTile(cx, cy, now);
     }
     if (!cell.pet) continue;
     // tile-card: every pet sits on a soft quilt square, not in a void (readability fix)
@@ -3290,6 +3404,8 @@ window._pw = function () {
 };
 window._arrival = function (i) { if (screenMode !== 'den') goDen(); startArrival(RESCUE_POOL[i || 0]); };   // dev hook: play the arrival ceremony on demand
 window._cross = function (i) { if (screenMode !== 'den') goDen(); startCrossing(i || 0); };                // dev hook: play the crossing on demand
+window._setTiles = function (arr) { curTiles = tilesFromSpec({ tiles: arr }); return curTiles; };          // dev hook: drop typed tiles onto the live board
+window._tiles = function () { var o = {}, k; for (k in curTiles) o[k] = { t: curTiles[k].t, n: curTiles[k].n, b: curTiles[k].b }; return o; };
 window._rescueState = function (i) { var r = save.rescues[i || 0]; return r ? { trust: r.trust, spotD: r.spotD, spotL: r.spotL, vused: r.vused, crossing: !!crossingScene, pos: rescueScreenPos } : null; };
 demoCv = $('demo-cv'); dctx = demoCv.getContext('2d');
 dreamsCv = $('dreams-cv'); drctx = dreamsCv.getContext('2d');
