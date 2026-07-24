@@ -500,7 +500,34 @@ var MASKS = [
   [[2, 6], [3, 6]],
   [[0, 0], [5, 0], [2, 6], [3, 6]]
 ];
-function maskFor(id) { return MASKS[id % MASKS.length]; }
+// ---- BOARD SILHOUETTES: the room's shape changes every night. '#' = a fixed piece of furniture, '.' = floor. ----
+// 6 wide x 7 tall, authored (never procedural). Perceived variety per unit of work is higher here than anywhere else.
+var SHAPES = [
+  ['......', '......', '......', '......', '......', '......', '......'],   // 0  open floor
+  ['#....#', '......', '......', '......', '......', '......', '#....#'],   // 1  the four corners
+  ['......', '......', '#....#', '##..##', '#....#', '......', '......'],   // 2  hourglass
+  ['......', '.#..#.', '.#..#.', '......', '.#..#.', '.#..#.', '......'],   // 3  two islands
+  ['......', '......', '..##..', '..##..', '..##..', '......', '......'],   // 4  the donut
+  ['......', '#....#', '.#..#.', '..##..', '......', '......', '......'],   // 5  chevron
+  ['#.....', '.#....', '..#...', '...#..', '....#.', '.....#', '......'],   // 6  the staircase
+  ['......', '......', '#....#', '#....#', '#....#', '......', '......'],   // 7  the gate
+  ['......', '......', '......', '......', '..##..', '..##..', '......'],   // 8  the well
+  ['..##..', '.#..#.', '#....#', '......', '......', '......', '......'],   // 9  the arch
+  ['......', '#....#', '.#..#.', '..##..', '.#..#.', '#....#', '......'],   // 10 bowtie
+  ['......', '.#.#..', '......', '..#.#.', '......', '.#.#..', '......'],   // 11 lattice
+  ['......', '#....#', '#....#', '.#..#.', '..##..', '......', '......'],   // 12 funnel
+  ['..##..', '..##..', '......', '......', '......', '..##..', '..##..'],   // 13 pillars
+  ['#.##.#', '......', '......', '......', '......', '......', '......'],   // 14 crown
+  ['......', '......', '......', '###...', '..#...', '..#...', '......'],   // 15 the nook
+  ['.#..#.', '......', '......', '......', '#....#', '.#..#.', '..##..'],   // 16 heartwood
+  ['..##..', '..##..', '......', '......', '#....#', '#....#', '......'],   // 17 keyhole
+  ['......', '......', '......', '......', '......', '#....#', '##..##'],   // 18 the hearth
+  ['......', '#....#', '##..##', '......', '......', '......', '......']    // 19 wings
+];
+function parseShape(rows) { var m = [], y, x; for (y = 0; y < rows.length; y++) for (x = 0; x < rows[y].length; x++) if (rows[y].charAt(x) === '#') m.push([x, y]); return m; }
+var SHAPE_MASKS = []; (function () { for (var si = 0; si < SHAPES.length; si++) SHAPE_MASKS.push(parseShape(SHAPES[si])); })();
+// stride 7 is coprime with 20, so any twenty consecutive nights are all different shapes — nothing repeats inside a street
+function maskFor(id) { return SHAPE_MASKS[(id * 7) % SHAPE_MASKS.length]; }
 function isMaskedCell(mask, x, y) { for (var i = 0; i < mask.length; i++) if (mask[i][0] === x && mask[i][1] === y) return true; return false; }
 function buildDeck(rng, spec) {
   deck = []; deckPos = 0;
@@ -3131,6 +3158,8 @@ window._pw = function () {
 window._arrival = function (i) { if (screenMode !== 'den') goDen(); startArrival(RESCUE_POOL[i || 0]); };   // dev hook: play the arrival ceremony on demand
 window._cross = function (i) { if (screenMode !== 'den') goDen(); startCrossing(i || 0); };                // dev hook: play the crossing on demand
 window._setTiles = function (arr) { curTiles = tilesFromSpec({ tiles: arr }); return curTiles; };          // dev hook: drop typed tiles onto the live board
+window._night = function (id) { startRun('night', id || 1); return { night: id || 1, mask: curMask, tiles: window._tiles(), par: botPar }; };   // dev hook: jump straight into a night
+window._maskFor = function (id) { return maskFor(id); };
 window._tiles = function () { var o = {}, k; for (k in curTiles) o[k] = { t: curTiles[k].t, n: curTiles[k].n, b: curTiles[k].b }; return o; };
 window._rescueState = function (i) { var r = save.rescues[i || 0]; return r ? { trust: r.trust, spotD: r.spotD, spotL: r.spotL, vused: r.vused, crossing: !!crossingScene, pos: rescueScreenPos } : null; };
 demoCv = $('demo-cv'); dctx = demoCv.getContext('2d');
